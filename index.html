@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d2b24">
+<meta name="description" content="Patience Garden — a botanical glasshouse solitaire. Build four foundations through a patient garden of cards.">
+<title>Patience Garden</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='24' font-size='24'>❀</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#board-region">Skip to the card table</a>
+<div id="app">
+
+  <!-- ======================= Title / home ======================= -->
+  <section id="screen-title" class="screen" aria-labelledby="title-heading">
+    <div class="glass-panel title-card">
+      <p class="kicker">A botanical glasshouse solitaire</p>
+      <h1 id="title-heading">Patience <span class="accent">Garden</span></h1>
+      <p class="tagline">Build four foundations. Uncover the garden. Take your time.</p>
+      <button id="btn-play" class="btn primary big">▶ Play</button>
+      <div class="title-grid">
+        <button id="btn-daily" class="btn"><span class="ic">☀</span> Daily <small id="daily-status"></small></button>
+        <button id="btn-journey" class="btn"><span class="ic">❀</span> Journey <small id="journey-status"></small></button>
+        <button id="btn-learn" class="btn"><span class="ic">✿</span> Learn</button>
+      </div>
+      <div class="title-row">
+        <button id="btn-scores" class="btn ghost">❦ Score Chase</button>
+        <button id="btn-profile" class="btn ghost">Profile</button>
+        <button id="btn-help" class="btn ghost">How to Play</button>
+        <button id="btn-settings" class="btn ghost">Settings</button>
+      </div>
+      <p class="build-note" id="build-note"></p>
+    </div>
+  </section>
+
+  <!-- ======================= Mode select ======================= -->
+  <section id="screen-modes" class="screen" hidden aria-labelledby="modes-heading">
+    <div class="glass-panel wide">
+      <h2 id="modes-heading">Choose your table</h2>
+      <div id="mode-list" class="card-grid"></div>
+      <div class="row-end"><button class="btn ghost" data-nav="title">← Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= Mode setup ======================= -->
+  <section id="screen-setup" class="screen" hidden aria-labelledby="setup-heading">
+    <div class="glass-panel">
+      <h2 id="setup-heading">Set up</h2>
+      <div id="setup-body"></div>
+      <div class="row-end">
+        <button class="btn ghost" data-nav="modes">← Back</button>
+        <button id="btn-start-game" class="btn primary">Begin</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= Journey map ======================= -->
+  <section id="screen-journey" class="screen" hidden aria-labelledby="journey-heading">
+    <div class="glass-panel wide tall">
+      <h2 id="journey-heading">The Journey</h2>
+      <p class="dim">Forty stages through the glasshouse. Mastery stages gate each act.</p>
+      <div id="journey-map" class="journey-map" role="list"></div>
+      <div class="row-end"><button class="btn ghost" data-nav="title">← Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= Learn (lesson list) ======================= -->
+  <section id="screen-learn" class="screen" hidden aria-labelledby="learn-heading">
+    <div class="glass-panel wide">
+      <h2 id="learn-heading">Lessons</h2>
+      <p class="dim">One rule at a time. You perform each action yourself.</p>
+      <div id="lesson-list" class="card-grid"></div>
+      <div class="row-end"><button class="btn ghost" data-nav="title">← Back</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= Game ======================= -->
+  <section id="screen-game" class="screen game" hidden>
+    <header id="hud-top" role="status" aria-label="Game status">
+      <button id="btn-pause" class="btn icon" aria-label="Pause (Esc)">❚❚</button>
+      <div id="hud-objective" aria-live="polite">
+        <strong id="hud-mode-name">Practice</strong>
+        <span id="hud-goal" class="dim"></span>
+      </div>
+      <div id="hud-stats">
+        <span title="Score">❦ <b id="hud-score">0</b></span>
+        <span title="Moves">↦ <b id="hud-moves">0</b></span>
+        <span title="Time">⏱ <b id="hud-time">0:00</b></span>
+      </div>
+      <button id="btn-rail-toggle" class="btn icon" aria-label="Toggle objective panel" aria-expanded="false">ℹ</button>
+    </header>
+
+    <aside id="rail-left" class="rail" aria-label="Objective and progress">
+      <h3>Objective</h3>
+      <p id="rail-objective">Build all four foundations, Ace to King.</p>
+      <div id="rail-progress" class="progress-rings"></div>
+      <p id="rail-constraint" class="dim"></p>
+    </aside>
+
+    <div id="board-region" role="application" aria-label="Card table" tabindex="-1">
+      <canvas id="game-canvas" aria-hidden="true"></canvas>
+      <div id="board-dom" hidden aria-label="Card table (accessible layout)"></div>
+      <div id="coach" class="coach" hidden></div>
+    </div>
+
+    <aside id="rail-right" class="rail" aria-label="Status">
+      <h3>Garden</h3>
+      <p id="rail-seed" class="dim mono"></p>
+      <p id="rail-streak"></p>
+      <p id="rail-assists" class="dim"></p>
+      <div id="rail-keys" class="keys-hint dim">
+        <span><kbd>D</kbd> draw</span><span><kbd>U</kbd> undo</span>
+        <span><kbd>H</kbd> hint</span><span><kbd>A</kbd> finish</span>
+      </div>
+    </aside>
+
+    <nav id="tray-bottom" aria-label="Actions">
+      <button id="btn-undo" class="btn">↩ Undo</button>
+      <button id="btn-hint" class="btn">✦ Hint</button>
+      <button id="btn-draw" class="btn">⟳ Draw</button>
+      <button id="btn-autofinish" class="btn primary" hidden>❀ Auto-finish</button>
+    </nav>
+  </section>
+
+  <!-- ======================= Pause ======================= -->
+  <section id="screen-pause" class="screen overlay" hidden aria-labelledby="pause-heading">
+    <div class="glass-panel">
+      <h2 id="pause-heading">Paused</h2>
+      <div class="stack">
+        <button id="btn-resume" class="btn primary big">Resume</button>
+        <button id="btn-pause-settings" class="btn">Settings</button>
+        <button id="btn-pause-help" class="btn">How to Play</button>
+        <button id="btn-restart" class="btn">Restart this deal</button>
+        <button id="btn-leave" class="btn danger">Leave game</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= Results ======================= -->
+  <section id="screen-results" class="screen overlay" hidden aria-labelledby="results-heading">
+    <div class="glass-panel">
+      <h2 id="results-heading">The garden rests</h2>
+      <p id="results-sub" class="dim"></p>
+      <div id="results-stars" class="stars" aria-hidden="true"></div>
+      <table id="results-table" class="score-table" aria-label="Score breakdown"></table>
+      <p id="results-progress" class="dim"></p>
+      <div id="results-achievements"></div>
+      <div class="row-end wrap">
+        <button id="btn-results-replay" class="btn">↻ Replay deal</button>
+        <button id="btn-results-next" class="btn primary">Next →</button>
+        <button id="btn-results-home" class="btn ghost">Home</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================= Settings ======================= -->
+  <section id="screen-settings" class="screen overlay" hidden aria-labelledby="settings-heading">
+    <div class="glass-panel wide tall scrollable">
+      <h2 id="settings-heading">Settings</h2>
+      <div id="settings-body" class="settings-grid"></div>
+      <div class="row-end"><button id="btn-settings-close" class="btn primary">Done</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= Help ======================= -->
+  <section id="screen-help" class="screen overlay" hidden aria-labelledby="help-heading">
+    <div class="glass-panel wide tall scrollable">
+      <h2 id="help-heading">How to Play</h2>
+      <div id="help-body"></div>
+      <div class="row-end"><button id="btn-help-close" class="btn primary">Done</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= Profile ======================= -->
+  <section id="screen-profile" class="screen overlay" hidden aria-labelledby="profile-heading">
+    <div class="glass-panel wide tall scrollable">
+      <h2 id="profile-heading">Gardener Profile</h2>
+      <div id="profile-body"></div>
+      <div class="row-end"><button id="btn-profile-close" class="btn primary">Done</button></div>
+    </div>
+  </section>
+
+  <!-- ======================= Score chase ======================= -->
+  <section id="screen-scores" class="screen overlay" hidden aria-labelledby="scores-heading">
+    <div class="glass-panel wide tall scrollable">
+      <h2 id="scores-heading">Score Chase</h2>
+      <p class="dim">Local leaderboard on validated seeds. Global boards activate when hosted.</p>
+      <div id="scores-body"></div>
+      <div class="row-end"><button id="btn-scores-close" class="btn primary">Done</button></div>
+    </div>
+  </section>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="announce" class="visually-hidden" aria-live="assertive"></div>
+  <div id="compat-note" class="glass-panel" hidden role="alert"></div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
