@@ -1,0 +1,74 @@
+[
+  {
+    "name": "card-select",
+    "seconds": 1,
+    "prompt": "A single playing card being lifted off a felt card table by fingertips: a soft paper tick with a faint fabric brush, quiet and dry.",
+    "event": "select"
+  },
+  {
+    "name": "card-draw",
+    "seconds": 1,
+    "prompt": "A playing card being slid off the top of a deck: a quick crisp paper flick followed by a soft snap as it leaves the stack.",
+    "event": "draw"
+  },
+  {
+    "name": "card-flip",
+    "seconds": 1,
+    "prompt": "A playing card flipped face-up on a table: a fast papery snap with a light flutter as the card turns over.",
+    "event": "flip"
+  },
+  {
+    "name": "card-place",
+    "seconds": 1,
+    "prompt": "A playing card set down gently onto a green felt table: a soft muted thud of cardstock on fabric, short and low.",
+    "event": "place"
+  },
+  {
+    "name": "invalid-move",
+    "seconds": 1,
+    "prompt": "Two short muted knocks of a card's corner tapped against the wooden table edge, a quiet restrained 'not allowed' gesture.",
+    "event": "invalid"
+  },
+  {
+    "name": "foundation-bank",
+    "seconds": 2,
+    "prompt": "A playing card placed onto a foundation stack with satisfaction: a soft card thud immediately followed by a gentle wooden wind-chime note ringing briefly.",
+    "event": "bank"
+  },
+  {
+    "name": "card-reveal",
+    "seconds": 1,
+    "prompt": "A face-down card turned over in a sunlit glasshouse: a light papery flip with a faint airy shimmer like a small glass sparkle.",
+    "event": "reveal"
+  },
+  {
+    "name": "undo-rewind",
+    "seconds": 1,
+    "prompt": "A soft reverse whoosh of a playing card sliding back across felt to where it came from, a gentle reversed paper sweep.",
+    "event": "undo"
+  },
+  {
+    "name": "hint-chime",
+    "seconds": 1,
+    "prompt": "A single delicate glass bell chime, small and bright, like a tiny greenhouse pane tapped gently once.",
+    "event": "hint"
+  },
+  {
+    "name": "pause-click",
+    "seconds": 1,
+    "prompt": "A soft wooden toggle switch being clicked: a warm muted clack of a small wooden latch, quiet and rounded.",
+    "event": "pause"
+  },
+  {
+    "name": "win-fanfare",
+    "seconds": 3,
+    "prompt": "A gentle celebratory garden moment: soft wind chimes rippling upward with distant cheerful birdsong, warm and unhurried, no brass or drums.",
+    "event": "win"
+  },
+  {
+    "name": "lose-sigh",
+    "seconds": 2,
+    "prompt": "A calm wistful settling sound: dry leaves rustling down onto soil with one low soft wooden chime note fading out, peaceful rather than harsh.",
+    "event": "lose"
+  }
+]

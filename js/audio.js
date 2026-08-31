@@ -96,11 +96,63 @@ function thock(bus, { freq = 180, dur = 0.06, gain = 0.25 }) {
   src.start(t);
 }
 
+// --- authored sample one-shots ------------------------------------------------
+// Each public event below maps to an authored clip in sfx/ (see
+// sfx/manifest.json). Clips are fetched, decoded and cached lazily — the first
+// play can only happen after the user-gesture unlock has started the context.
+// While a clip is loading, or if it is missing/undecodable, the synthesized
+// fallback in the event map plays instead.
+
+const SFX_SAMPLES = {
+  select: 'card-select',
+  draw: 'card-draw',
+  flip: 'card-flip',
+  place: 'card-place',
+  invalid: 'invalid-move',
+  bank: 'foundation-bank',
+  reveal: 'card-reveal',
+  undo: 'undo-rewind',
+  hint: 'hint-chime',
+  pause: 'pause-click',
+  win: 'win-fanfare',
+  lose: 'lose-sigh',
+};
+
+// name -> AudioBuffer | 'loading' | 'failed'
+const sampleCache = new Map();
+
+/** Play the authored clip for an event if decoded; returns true when played. */
+function trySample(eventName) {
+  const sample = SFX_SAMPLES[eventName];
+  if (!sample) return false;
+  const cached = sampleCache.get(sample);
+  if (cached instanceof AudioBuffer) {
+    const src = ctx.createBufferSource();
+    src.buffer = cached;
+    src.connect(buses.effects);
+    src.start();
+    return true;
+  }
+  if (cached === undefined) {
+    sampleCache.set(sample, 'loading');
+    fetch(`sfx/${sample}.opus`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`sfx ${sample}: ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((data) => ctx.decodeAudioData(data))
+      .then((buffer) => sampleCache.set(sample, buffer))
+      .catch(() => sampleCache.set(sample, 'failed'));
+  }
+  return false;
+}
+
 // --- public event map ---------------------------------------------------------
 // Event hierarchy: ack < legal move < goal < round completion.
 
 export function playSfx(name) {
   if (!ctx || ctx.state !== 'running') return;
+  if (trySample(name)) return;
   const fx = buses.effects;
   const variant = 1 + (rng() - 0.5) * 0.12; // seeded pitch variants
   switch (name) {
