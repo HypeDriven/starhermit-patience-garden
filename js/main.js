@@ -329,6 +329,7 @@ async function startGame() {
   ui.showScreen('game');
   ui.setBoard2DVisible(boardIs2D());
   await ensureRenderer();
+  ui.setBoard2DVisible(boardIs2D()); // renderer may have failed during ensureRenderer
   if (renderer) renderer.setState(session.state, { instant: false });
   refreshBoard(true);
   updateCoach();
@@ -1046,7 +1047,7 @@ function refreshPlayButton() {
   const snap = store.loadSessionSnapshot();
   const playBtn = document.getElementById('btn-play');
   const hasSave = !!(snap && snap.state?.status === 'active');
-  playBtn.textContent = hasSave ? '▶ Resume garden' : '▶ Play';
+  playBtn.textContent = hasSave ? 'Resume garden' : 'Play';
 }
 
 async function resumeSavedGame() {
@@ -1058,6 +1059,7 @@ async function resumeSavedGame() {
   ui.showScreen('game');
   ui.setBoard2DVisible(boardIs2D());
   await ensureRenderer();
+  ui.setBoard2DVisible(boardIs2D()); // renderer may have failed during ensureRenderer
   if (renderer) renderer.setState(session.state, { instant: true });
   session.resume();
   refreshBoard(true);

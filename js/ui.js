@@ -126,13 +126,21 @@ export function createUI(handlers) {
     const host = $('mode-list');
     host.innerHTML = '';
     for (const m of MODES) {
+      const card = document.createElement('div');
+      card.className = 'mode-card';
       const b = document.createElement('button');
-      b.className = 'mode-card';
-      b.innerHTML = `<h3>${m.icon} ${m.name} ${m.ranked ? '<span class="badge">ranked</span>' : ''}</h3>
+      b.className = 'mode-card-btn';
+      // Keep the button label exactly the mode name: it is the card's action,
+      // and assistive tech / automation match on the full label text.
+      b.innerHTML = `<h3 data-icon="${m.icon}">${m.name}</h3>`;
+      b.addEventListener('click', () => handlers.onModeSelect(m.id));
+      const info = document.createElement('div');
+      info.className = 'mode-card-info';
+      info.innerHTML = `${m.ranked ? '<span class="badge">ranked</span>' : ''}
         <p>${m.blurb}</p>
         <span class="meta"><span>1 player</span><span>${m.duration}</span><span>assists: ${m.assists}</span></span>`;
-      b.addEventListener('click', () => handlers.onModeSelect(m.id));
-      host.appendChild(b);
+      card.append(b, info);
+      host.appendChild(card);
     }
   }
 

@@ -471,14 +471,14 @@ export const ACHIEVEMENTS = [
 // ---------------------------------------------------------------------------
 
 export const MODES = [
+  { id: 'practice',  name: 'Practice',  icon: '☘', ranked: false, players: 1, assists: 'all', duration: 'you choose',
+    blurb: 'Pick a difficulty, restart freely, undo and hint without consequence.' },
   { id: 'learn',     name: 'Learn',     icon: '✿', ranked: false, players: 1, assists: 'guided', duration: '2 min',
     blurb: 'Interactive lessons. One rule at a time — you perform each action.' },
   { id: 'journey',   name: 'Journey',   icon: '❀', ranked: false, players: 1, assists: 'undo, hints', duration: '3–15 min',
     blurb: 'Forty authored stages through the glasshouse, ending in mastery trials.' },
   { id: 'daily',     name: 'Daily',     icon: '☀', ranked: true,  players: 1, assists: 'undo, hints (flagged)', duration: '~12 min',
     blurb: 'One shared seed per UTC day. Same garden for every player.' },
-  { id: 'practice',  name: 'Practice',  icon: '☘', ranked: false, players: 1, assists: 'all', duration: 'you choose',
-    blurb: 'Pick a difficulty, restart freely, undo and hint without consequence.' },
   { id: 'challenge', name: 'Challenge', icon: '✦', ranked: false, players: 1, assists: 'varies', duration: '6–20 min',
     blurb: 'Constrained goals: move limits, speed targets, altered layouts.' },
   { id: 'score',     name: 'Score Chase', icon: '❦', ranked: true, players: 1, assists: 'undo, hints (flagged)', duration: '~12 min',

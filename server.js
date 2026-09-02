@@ -73,14 +73,38 @@ export function leaderboardEntry(envelope, playerId) {
 
 if (typeof process !== 'undefined' && process.argv?.[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const { createServer } = await import('node:http');
+  const { readFile } = await import('node:fs/promises');
+  const { extname, join, normalize, sep } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('.', import.meta.url));
+  const MIME = {
+    '.html': 'text/html; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.ico': 'image/x-icon',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.mp3': 'audio/mpeg',
+    '.ogg': 'audio/ogg',
+    '.wav': 'audio/wav',
+    '.txt': 'text/plain; charset=utf-8',
+    '.md': 'text/markdown; charset=utf-8',
+  };
   const started = Date.now();
-  createServer((req, res) => {
-    res.setHeader('content-type', 'application/json');
-    if (req.url === '/api/v1/time') {
+  createServer(async (req, res) => {
+    const path = (req.url || '/').split('?')[0];
+    if (path === '/api/v1/time') {
+      res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify({ now: new Date().toISOString(), serverStarted: started }));
-    } else if (req.url?.startsWith('/api/v1/daily')) {
+    } else if (path.startsWith('/api/v1/daily')) {
+      res.setHeader('content-type', 'application/json');
       res.end(JSON.stringify(dailyDescriptor(new Date())));
-    } else if (req.url === '/api/v1/validate' && req.method === 'POST') {
+    } else if (path === '/api/v1/validate' && req.method === 'POST') {
+      res.setHeader('content-type', 'application/json');
       let body = '';
       req.on('data', (c) => { body += c; if (body.length > 1e6) req.destroy(); });
       req.on('end', () => {
@@ -92,8 +116,23 @@ if (typeof process !== 'undefined' && process.argv?.[1] && import.meta.url.endsW
         }
       });
     } else {
-      res.statusCode = 404;
-      res.end(JSON.stringify({ error: 'not-found' }));
+      // Static file serving for the game client.
+      const rel = normalize(decodeURIComponent(path === '/' ? '/index.html' : path)).replace(/^([/\\])+/, '');
+      const file = join(root, rel);
+      if (file !== root && !file.startsWith(root.endsWith(sep) ? root : root + sep)) {
+        res.statusCode = 403;
+        res.end('forbidden');
+        return;
+      }
+      try {
+        const data = await readFile(file);
+        res.setHeader('content-type', MIME[extname(file).toLowerCase()] || 'application/octet-stream');
+        res.end(data);
+      } catch {
+        res.statusCode = 404;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: 'not-found' }));
+      }
     }
   }).listen(Number(process.env.PG_PORT) || 8091, function () {
     console.log(`patience-garden authoritative script on :${this.address().port}`);
