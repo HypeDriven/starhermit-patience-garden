@@ -27,7 +27,7 @@ python3 -m http.server 8080
 - `js/audio.js`, `js/storage.js` — procedural WebAudio, local persistence
 - `server.js` — authoritative validation script (daily seeds, replay checks)
 - `starhermit.txt` — host packaging manifest
-- `test/` — `node --test test/*.test.mjs`
+- `tests/` — `node --test tests/*.test.mjs`
 - `tools/precompute.mjs` — regenerates `js/content-seeds.js` (offline content validation)
 
 ## Modes

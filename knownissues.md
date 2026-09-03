@@ -7,7 +7,7 @@ alongside the game's own unit tests and a headless-Chrome boot/mode/crawl sweep.
 
 | Check | Result |
 | --- | --- |
-| `npm test` | not present — there is no `package.json`; `node --test test/rules.test.mjs` gives 33/33 pass |
+| `npm test` | not present — there is no `package.json`; `node --test tests/rules.test.mjs` gives 33/33 pass |
 | `node --check` on all modules | clean (11 modules + `server.js`) |
 | `tests/e2e.mjs` (headless Chrome) | not present — replaced by an ad-hoc CDP boot/mode/crawl sweep (see below) |
 
@@ -17,11 +17,11 @@ deal played through draw/hint/undo/pause/resume, two random UI crawls of 70 and 
 (0 errors), and a corrupt-`localStorage` reload matrix (`{"broken":`, `null`, `[]`, `{}`,
 non-JSON — all booted cleanly).
 
-Note on the test command: the header of `test/rules.test.mjs` documents `node --test test/`.
+Note on the test command: the header of `tests/rules.test.mjs` documents `node --test tests/`.
 On this machine's Node v22.22.1 a *directory* argument to `--test` fails
 (`Cannot find module '.../test'`), but that is a Node behaviour, not a game defect — the same
 thing happens in other games in this repo. Bare `node --test` and
-`node --test test/rules.test.mjs` both pass 33/33.
+`node --test tests/rules.test.mjs` both pass 33/33.
 
 ## Confirmed defects
 
@@ -65,7 +65,7 @@ Defects below were each verified by reading the source, not just reported by the
   `js/main.js:789`, writing to the local board described by `js/storage.js:113`
   ("local leaderboard (score chase)"). The shipped authoritative validator
   (`server.js` `validateSubmission` / `leaderboardEntry`) is never called by the game and is not
-  covered by `test/rules.test.mjs` either.
+  covered by `tests/rules.test.mjs` either.
 - **Expected:** spec.md:203-204 — "Provide global and friends-filtered boards… For globally
   competitive boards, validate score claims through a lightweight authoritative script using
   replayable input logs and deterministic seeds. **If validation is unavailable, label the board
