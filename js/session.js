@@ -177,7 +177,21 @@ export class Session {
   hint() {
     if (this.ended || this.paused) return null;
     const h = engineHint(this.state);
-    if (h) this.state = { ...this.state, hints: this.state.hints + 1 };
+    if (!h) return null;
+    // Record the assist as an authoritative command so the replay log
+    // reconstructs it (a hinted run can never be published as unassisted).
+    const id = nextCommandId();
+    const wrap = { ...this.state, elapsedMs: this.elapsedMs() };
+    const r = applyCommand(wrap, { id, type: 'hint' });
+    if (r.ok) {
+      this.state = r.state;
+      this._seenCommands.add(id);
+      this._resumedAt = this.now();
+      this.envelope.commands.push({ type: 'hint', id, elapsedMs: this.state.elapsedMs });
+      if (this.state.turn % 10 === 0) {
+        this.envelope.hashes.push({ turn: this.state.turn, hash: stateHash(this.state) });
+      }
+    }
     return h;
   }
 

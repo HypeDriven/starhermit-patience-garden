@@ -33,6 +33,10 @@ export function validateSubmission(envelope) {
   const state = v.state;
   if (envelope.result.status !== state.status) return { accept: false, reason: 'result-mismatch' };
   if (envelope.result.score !== totalScore(state)) return { accept: false, reason: 'score-mismatch' };
+  // Assist fields must match the authoritative replay — a hinted/undone run
+  // cannot be published as unassisted via a forged envelope.
+  if ((envelope.result.hints || 0) !== (state.hints || 0)) return { accept: false, reason: 'hints-mismatch' };
+  if ((envelope.result.undos || 0) !== (state.undos || 0)) return { accept: false, reason: 'undos-mismatch' };
   // plausibility: elapsed time vs command count
   const lastMs = envelope.commands.length
     ? Math.max(...envelope.commands.map((c) => c.elapsedMs || 0)) : 0;

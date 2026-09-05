@@ -771,7 +771,7 @@ function finishRound() {
       stats.dailyCompleted += 1;
       if (stats.dailyCompleted >= 5 && store.unlockAchievement('daily_devotion')) newly.push({ name: 'Daily Devotion' });
     }
-    store.addScore({ mode: 'daily', seed: b.seed, rulesetKey: 'daily', score: b.total, moves: b.moves, ms: b.ms, assists: b.undos + b.hints > 0, date: day });
+    store.addScore({ mode: 'daily', seed: b.seed, rulesetKey: 'daily', score: b.total, moves: b.moves, ms: b.ms, assists: b.undos + b.hints > 0, date: day, status: b.status, invalids: b.invalids, sessionId: session.sessionId });
     resultsContext = { mode: 'daily' };
     progressNote = won ? 'Daily complete — see you tomorrow.' : 'The daily remains unconquered.';
   } else if (session.mode === 'challenge') {
@@ -787,7 +787,7 @@ function finishRound() {
     resultsContext = { mode: 'challenge' };
   } else if (session.mode === 'score') {
     if (won) {
-      store.addScore({ mode: 'score', seed: b.seed, rulesetKey: session.contentId, score: b.total, moves: b.moves, ms: b.ms, assists: b.undos + b.hints > 0 });
+      store.addScore({ mode: 'score', seed: b.seed, rulesetKey: session.contentId, score: b.total, moves: b.moves, ms: b.ms, assists: b.undos + b.hints > 0, status: b.status, invalids: b.invalids, sessionId: session.sessionId });
     }
     resultsContext = { mode: 'score' };
     progressNote = 'Saved to the local board.';
@@ -1037,6 +1037,7 @@ function init() {
     get appState() { return appState; },
     get renderer() { return renderer; },
     dispatch(cmd) { tryDispatch(cmd); }, // debug/testing: full UI path
+    canAcceptInput() { return canAcceptInput(); }, // input lock (reduced-motion / resolution phase)
   };
 
   // resume offer: Play becomes snapshot-aware; falls back to mode select

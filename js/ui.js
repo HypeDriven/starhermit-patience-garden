@@ -199,7 +199,7 @@ export function createUI(handlers) {
         <h4>One garden, worldwide</h4>
         <p>Everyone plays the same seed today. Draw 1, unlimited recycles. Undo and hints are allowed but flagged as assists on the board.</p>
         <p class="mono dim">seed ${ctx.daily.seed.toString(16)} · ruleset v${ctx.daily.version}</p></div></div>
-        <p class="dim">Ranked. Next daily in <b id="daily-countdown"></b>.</p>`;
+        <p class="dim">Local board. Next daily in <b id="daily-countdown"></b>.</p>`;
       setupConfig.daily = ctx.daily;
     } else if (mode === 'journey') {
       const s = ctx.stage;
@@ -217,7 +217,7 @@ export function createUI(handlers) {
         const b = document.createElement('button');
         b.className = 'mode-card' + (i === 0 ? ' completed' : '');
         b.innerHTML = `<h3>${BAND_LABELS[band]} ${profile}</h3>
-          <p>A fixed, validated ${band} seed. Ranked locally; assists flagged.</p>`;
+          <p>A fixed, validated ${band} seed. Local board; assists flagged.</p>`;
         b.addEventListener('click', () => {
           grid.querySelectorAll('.mode-card').forEach((x) => x.classList.remove('completed'));
           b.classList.add('completed');
@@ -579,7 +579,7 @@ export function createUI(handlers) {
       <h3>Controls</h3>
       <div class="rule-card"><div class="demo">⌨</div><div><h4>Keyboard</h4><p>Arrows move focus between piles · <kbd>Enter</kbd>/<kbd>Space</kbd> select or place · <kbd>D</kbd> draw · <kbd>U</kbd> undo · <kbd>H</kbd> hint · <kbd>A</kbd> auto-finish · <kbd>Esc</kbd> pause.</p></div></div>
       <div class="rule-card"><div class="demo">👆</div><div><h4>Pointer &amp; touch</h4><p>Tap a card to select, tap a target to place — or drag runs directly. Double-tap banks to a foundation. Tap the stock to draw.</p></div></div>
-      <div class="rule-card"><div class="demo">✦</div><div><h4>Assists</h4><p>Undo and Hint are always available in Practice and Journey. Ranked boards flag assisted runs.</p></div></div>`;
+      <div class="rule-card"><div class="demo">✦</div><div><h4>Assists</h4><p>Undo and Hint are always available in Practice and Journey. Assisted runs are flagged on the board.</p></div></div>`;
   }
 
   // ---- profile / scores -------------------------------------------------------------
@@ -611,7 +611,7 @@ export function createUI(handlers) {
   function renderScores(entries) {
     const host = $('scores-body');
     if (!entries.length) {
-      host.innerHTML = '<p class="dim">No ranked results yet. Play the Daily or a Score Chase table.</p>';
+      host.innerHTML = '<p class="dim">No results yet. Play the Daily or a Score Chase table.</p>';
       return;
     }
     const byMode = {};

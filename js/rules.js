@@ -475,6 +475,13 @@ export function applyCommand(prev, cmd) {
       return { ok: true, state: { ...restored, turn: prev.turn }, events };
     }
 
+    case 'hint': { // assist — recorded in the log so replay reconstructs it
+      state.hints += 1;
+      events.push({ type: 'hint' });
+      next = state;
+      break;
+    }
+
     case 'concede': {
       state.status = 'lost';
       state.terminalReason = 'conceded';
@@ -496,7 +503,7 @@ export function applyCommand(prev, cmd) {
   }
 
   if (next) {
-    next.moves += cmd.type === 'autofinish' ? 0 : 1;
+    next.moves += (cmd.type === 'autofinish' || cmd.type === 'hint') ? 0 : 1;
     next.turn = prev.turn + 1;
     finishIfWon(next, events);
     return { ok: true, state: next, events };

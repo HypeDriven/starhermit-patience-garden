@@ -249,7 +249,7 @@ export function scoreChaseDeal(profile, band, index = 0) {
     version: CONTENT_VERSION,
     seed: picked.seed,
     ruleset: { suitCount: prof.suitCount, targets: prof.targets.slice() },
-    ranked: true,
+    ranked: false,
     label: `${BAND_LABELS[band]} ${prof.label}`,
   };
 }
@@ -294,7 +294,7 @@ export function dailyInfo(date = new Date()) {
     day,
     seed,
     ruleset: { suitCount: 4, targets: PROFILES.wildwood.targets.slice() },
-    ranked: true,
+    ranked: false,
     expectedMinutes: 12,
   };
 }
@@ -477,11 +477,11 @@ export const MODES = [
     blurb: 'Interactive lessons. One rule at a time — you perform each action.' },
   { id: 'journey',   name: 'Journey',   icon: '❀', ranked: false, players: 1, assists: 'undo, hints', duration: '3–15 min',
     blurb: 'Forty authored stages through the glasshouse, ending in mastery trials.' },
-  { id: 'daily',     name: 'Daily',     icon: '☀', ranked: true,  players: 1, assists: 'undo, hints (flagged)', duration: '~12 min',
+  { id: 'daily',     name: 'Daily',     icon: '☀', ranked: false, players: 1, assists: 'undo, hints (flagged)', duration: '~12 min',
     blurb: 'One shared seed per UTC day. Same garden for every player.' },
   { id: 'challenge', name: 'Challenge', icon: '✦', ranked: false, players: 1, assists: 'varies', duration: '6–20 min',
     blurb: 'Constrained goals: move limits, speed targets, altered layouts.' },
-  { id: 'score',     name: 'Score Chase', icon: '❦', ranked: true, players: 1, assists: 'undo, hints (flagged)', duration: '~12 min',
+  { id: 'score',     name: 'Score Chase', icon: '❦', ranked: false, players: 1, assists: 'undo, hints (flagged)', duration: '~12 min',
     blurb: 'Chase the local leaderboard on validated seeds. Compare with friends.' },
 ];
 

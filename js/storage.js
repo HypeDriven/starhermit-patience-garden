@@ -3,6 +3,7 @@
 // private data are ever stored here; conflicts preserve both snapshots.
 
 import { checksum } from './rng.js';
+import { compareResults } from './rules.js';
 
 const PREFIX = 'patience-garden/';
 
@@ -122,10 +123,28 @@ export function loadScores() {
  */
 export function addScore(entry) {
   const doc = loadScores();
-  doc.entries.push({ ...entry, when: Date.now() });
-  doc.entries.sort((a, b) =>
-    b.score - a.score || a.moves - b.moves || a.ms - b.ms || String(a.when).localeCompare(String(b.when)));
-  doc.entries = doc.entries.slice(0, 200);
+  doc.entries.push({
+    ...entry,
+    status: entry.status || 'won',            // ties: completion first
+    invalids: entry.invalids || 0,            // ties: fewer invalid actions
+    elapsedMs: entry.ms || 0,                 // ties: lower authoritative elapsed
+    sessionId: entry.sessionId || String(entry.when || Date.now()),
+    when: Date.now(),
+  });
+  // Primary sort: highest score first; ties per spec (rules.compareResults).
+  const bySpec = (a, b) => b.score - a.score || compareResults(a, b);
+  doc.entries.sort(bySpec);
+  // Retention: best 100 per mode, so one prolific mode cannot evict another.
+  const perMode = new Map();
+  for (const e of doc.entries) {
+    const key = e.mode || 'default';
+    if (!perMode.has(key)) perMode.set(key, []);
+    perMode.get(key).push(e);
+  }
+  const kept = [];
+  for (const list of perMode.values()) kept.push(...list.slice(0, 100));
+  kept.sort(bySpec);
+  doc.entries = kept;
   write('scores', doc);
   return doc.entries;
 }

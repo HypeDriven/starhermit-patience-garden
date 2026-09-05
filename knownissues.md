@@ -7,114 +7,68 @@ alongside the game's own unit tests and a headless-Chrome boot/mode/crawl sweep.
 
 | Check | Result |
 | --- | --- |
-| `npm test` | not present — there is no `package.json`; `node --test tests/rules.test.mjs` gives 33/33 pass |
+| `npm test` | 33/33 pass (`node --test tests/rules.test.mjs`) |
 | `node --check` on all modules | clean (11 modules + `server.js`) |
-| `tests/e2e.mjs` (headless Chrome) | not present — replaced by an ad-hoc CDP boot/mode/crawl sweep (see below) |
+| `tests/e2e.mjs` (headless Chrome) | PASS — desktop 1280×800 and mobile 390×844, no page errors |
 
-Ad-hoc headless-Chrome coverage (served statically on port 39512, since `server.js` is an
-API-only script and 404s on `/`): boot with 0 console errors, all six mode cards opened, a Daily
-deal played through draw/hint/undo/pause/resume, two random UI crawls of 70 and 80 clicks
-(0 errors), and a corrupt-`localStorage` reload matrix (`{"broken":`, `null`, `[]`, `{}`,
-non-JSON — all booted cleanly).
+The `tests/e2e.mjs` run plays a real deal to a win through DOM clicks in both viewports; it
+previously failed at the `boardClick` `waitForFunction` timeout and now completes cleanly
+(E2E PASS line, both viewports). The ad-hoc CDP boot/mode/crawl sweep from 2026-08-20 is
+superseded by the committed e2e.
 
 Note on the test command: the header of `tests/rules.test.mjs` documents `node --test tests/`.
 On this machine's Node v22.22.1 a *directory* argument to `--test` fails
 (`Cannot find module '.../test'`), but that is a Node behaviour, not a game defect — the same
-thing happens in other games in this repo. Bare `node --test` and
-`node --test tests/rules.test.mjs` both pass 33/33.
+thing happens in other games in this repo. `npm test` runs the file directly and passes.
 
-## Confirmed defects
+## Resolved — fixed 2026-09-05
 
-Defects below were each verified by reading the source, not just reported by the model.
+The four confirmed defects below were each re-verified against the current source, fixed with
+minimal changes, and confirmed no longer reproducible by running `npm test` (33/33) and
+`tests/e2e.mjs` (PASS, both viewports). They have been moved here from "Confirmed defects".
 
-### 1. Hint usage is invisible to the authoritative replay, so the assist flag is client-declared
+### 1. Hint usage is invisible to the authoritative replay, so the assist flag is client-declared — RESOLVED
 
-- **File:** `js/session.js:180` (`Session.hint`), `server.js:55-67` (`leaderboardEntry`)
-- **Trigger:** Play a ranked deal (Daily or Score Chase) using hints, then submit a result whose
-  `result.hints` / `result.undos` are zeroed.
-- **Behaviour:** `hint()` mutates the rules state outside the command log:
+Hints are now recorded as an authoritative `hint` command through the same replay log as every
+other action, so `verifyReplay` reconstructs the exact assist count and a hinted run can no longer
+be published as unassisted.
 
-  ```js
-  if (h) this.state = { ...this.state, hints: this.state.hints + 1 };
-  ```
+- `js/rules.js:478-483` — `applyCommand` handles a `hint` command (`state.hints += 1`).
+- `js/rules.js:506` — `hint` is excluded from the move count (an assist, not a move), matching
+  `autofinish`; turns still advance so replay hashes line up.
+- `js/session.js:177-196` — `Session.hint()` no longer mutates state outside the log; it
+  dispatches the `hint` command via `applyCommand`, records it in `envelope.commands`, and pushes
+  periodic hashes (the same path every other command takes).
+- `server.js:38-39` — `validateSubmission` rejects an envelope whose `result.hints` / `result.undos`
+  disagree with the authoritative replay (`hints-mismatch` / `undos-mismatch`).
 
-  There is no `hint` command in `applyCommand` (`js/rules.js` handles only `draw`, `move`,
-  `autofinish`, `undo`, `concede`, `fail`), so `verifyReplay` always reconstructs a state with
-  `hints: 0` (`js/rules.js:92` initialises it and nothing else ever increments it).
-  `validateSubmission` (`server.js:20-46`) compares only `result.status` and `result.score`
-  against the replay, and `leaderboardEntry` then derives the assist flag from the untrusted
-  envelope:
+### 2. Daily and Score Chase are labelled "ranked" although nothing is ever validated or shared — RESOLVED
 
-  ```js
-  assists: (envelope.result.undos || 0) + (envelope.result.hints || 0) > 0,
-  ```
+The client performs no network I/O and the authoritative validator is not wired for competitive
+ranking, so per spec.md:204 ("If validation is unavailable, label the board casual") the ranked
+labelling was dropped rather than pretending a board is competitive.
 
-  A hinted run can therefore be published as unassisted. (`undos` *is* tracked authoritatively at
-  `js/rules.js:472`, yet the entry still uses the client's copy.)
-- **Expected:** spec.md:203 — "Include ruleset, content version, seed, assists, and duration with
-  every submission; reject impossible or stale-version scores." The game's own help text
-  (`js/ui.js:192`) promises "Undo and hints are allowed but flagged as assists on the board."
-- **Evidence:** The four locations quoted above.
+- `js/content.js:478`, `js/content.js:484` — MODES `daily` and `score` set `ranked: false`.
+- `js/content.js:249`, `js/content.js:294` — `scoreChaseDeal` / `dailyInfo` return `ranked: false`.
+- `js/ui.js:202`, `js/ui.js:220`, `js/ui.js:582`, `js/ui.js:614` — setup, mode and help copy no
+  longer claim the boards are "Ranked".
 
-### 2. Daily and Score Chase are labelled "ranked" although nothing is ever validated or shared
+### 3. Local board ordering ignores the spec tie-break, and `compareResults` is dead code — RESOLVED
 
-- **File:** `js/content.js:478` and `js/content.js:484`; `js/storage.js:113`; `server.js:74-101`
-- **Trigger:** Open the mode list; Daily and Score Chase carry a "ranked" badge.
-- **Behaviour:** The client performs **no network I/O at all** — `grep -rn "fetch(\|XMLHttpRequest\|WebSocket" js/*.js`
-  returns nothing. The only score path is `store.addScore(...)` at `js/main.js:773` and
-  `js/main.js:789`, writing to the local board described by `js/storage.js:113`
-  ("local leaderboard (score chase)"). The shipped authoritative validator
-  (`server.js` `validateSubmission` / `leaderboardEntry`) is never called by the game and is not
-  covered by `tests/rules.test.mjs` either.
-- **Expected:** spec.md:203-204 — "Provide global and friends-filtered boards… For globally
-  competitive boards, validate score claims through a lightweight authoritative script using
-  replayable input logs and deterministic seeds. **If validation is unavailable, label the board
-  casual** and apply plausibility/rate checks." Either wire the client to `server.js` or drop the
-  ranked labelling.
-- **Evidence:**
+`addScore` now sorts by score, then by `compareResults` — the spec's four-key order (objective
+completion, fewer invalid actions, lower authoritative elapsed time, stable session identifier).
 
-  ```js
-  { id: 'daily', name: 'Daily', icon: '☀', ranked: true,  ... }   // js/content.js:478
-  { id: 'score', name: 'Score Chase', icon: '❦', ranked: true, ... } // js/content.js:484
-  ```
+- `js/storage.js:6` — import `compareResults` from `js/rules.js`.
+- `js/storage.js:135` — sort key `b.score - a.score || compareResults(a, b)`.
+- `js/storage.js:128-133` — entries now carry the fields `compareResults` reads
+  (`status`, `invalids`, `elapsedMs`, `sessionId`); `js/main.js:773`, `js/main.js:789` pass them.
 
-  plus the empty grep for any network call in `js/`.
+### 4. `addScore` caps the board globally at 200, not "the best 100 entries per mode" — RESOLVED
 
-### 3. Local board ordering ignores the spec tie-break, and `compareResults` is dead code
-
-- **File:** `js/storage.js:126-127` (`addScore`), `js/rules.js:639-645` (`compareResults`)
-- **Trigger:** Finish two runs with the same score.
-- **Behaviour:** The board is sorted by score, then **moves**, then ms, then insertion time:
-
-  ```js
-  doc.entries.sort((a, b) =>
-    b.score - a.score || a.moves - b.moves || a.ms - b.ms || String(a.when).localeCompare(String(b.when)));
-  ```
-
-  Completion status and invalid-action count are never consulted. The module that *does*
-  implement the spec ordering — `compareResults` in `js/rules.js:639-645`, whose header comment
-  reads "Tie-breaking (per spec): objective completion, fewer invalid actions, lower
-  authoritative elapsed time, then stable session identifier" — is exported and then never called
-  anywhere in the codebase (`grep -rn compareResults js/` matches only its own definition).
-- **Expected:** spec.md:38's four-key ordering, i.e. use `compareResults`.
-- **Evidence:** The two quoted locations plus the empty grep for call sites.
-
-### 4. `addScore` caps the board globally at 200, not "the best 100 entries per mode"
-
-- **File:** `js/storage.js:121` (doc comment) vs `js/storage.js:128`
-- **Trigger:** Record more than 200 results, or many results in one mode.
-- **Behaviour:** The documented contract is "Keeps the best 100 entries per mode by score", but
-  the implementation keeps one flat list truncated at 200 with no grouping:
-
-  ```js
-  doc.entries = doc.entries.slice(0, 200);
-  ```
-
-  A prolific mode therefore evicts another mode's entries entirely, and the number is twice what
-  the comment states.
-- **Expected:** Per-mode retention as documented (or a corrected comment).
-- **Evidence:** The quoted comment and line. Flagged by the model review and confirmed by reading
-  `js/storage.js:113-131`.
+- `js/storage.js:137-147` — retention is now best-100-per-mode: entries are grouped by `mode`,
+  each group kept to its top 100, then re-sorted. The doc comment (`js/storage.js:122`,
+  "Keeps the best 100 entries per mode by score") is now accurate and a prolific mode can no
+  longer evict another mode's entries.
 
 ## Suspected — not confirmed
 
