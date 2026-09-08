@@ -166,8 +166,12 @@ async function runPass(vpName, contextOpts) {
       await page.waitForFunction(() => window.__pg.session.state.moves === 1);
       let st = await stateInfo(page);
       if (st.waste < 1) throw new Error('draw did not fill the waste');
+      // Wait out the post-draw input lock, or the hint click is silently dropped.
+      await waitInputReady(page);
       await page.click('#btn-hint');
-      await page.waitForSelector('#toast.show');
+      // Wait for the hint toast's *text*: a stale toast ("Dealing…") may still
+      // be visible from game start, so matching visibility alone races.
+      await page.waitForFunction(() => /Hint:/.test(document.getElementById('toast').textContent), null, { timeout: 8000 });
       const hintText = await page.textContent('#toast');
       if (!/Hint:/.test(hintText)) throw new Error('hint produced no toast: ' + hintText);
       console.log('  hint:', hintText.trim());

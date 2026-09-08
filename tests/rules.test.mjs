@@ -15,6 +15,7 @@ import {
   classify, estimateWinRate,
 } from '../js/solver.js';
 import { createRng, hashString, checksum, shuffled } from '../js/rng.js';
+import { Session } from '../js/session.js';
 import {
   JOURNEY, CHALLENGES, LESSONS, THEMES, ACHIEVEMENTS, practiceDeal, dailyInfo,
   validateContentIndex,
@@ -328,6 +329,28 @@ test('replay: same seed + commands produce identical state hashes', () => {
     const v = verifyReplay(envelope);
     assert.ok(v.ok, `seed ${seed}: ${v.error} @${v.mismatchAt}`);
   }
+});
+
+test('replay survives an undo on a hash-checkpointed turn', () => {
+  // Undo keeps turn monotonic but not unique; periodic hashes are keyed by
+  // command index so an undo landing on a turn % 10 boundary cannot produce
+  // a false hash-mismatch (regression: such envelopes failed verification).
+  const { layout } = generateWinnableLayout(42, { suitCount: 4, targets: [1, 2, 3, 4, 5, 6, 7] });
+  const s = new Session({
+    mode: 'practice', seed: 42, ruleset: {}, layout,
+    initialState: createCustomGame(layout, {}, 42),
+  });
+  let guard = 0;
+  while (s.state.turn % 10 !== 9 && guard++ < 50) {
+    assert.ok(s.dispatch({ type: 'draw' }).ok);
+  }
+  assert.ok(s.dispatch({ type: 'draw' }).ok); // lands on turn % 10 === 0
+  assert.equal(s.envelope.hashes.length > 0, true);
+  assert.ok(s.undo().ok);
+  assert.ok(s.dispatch({ type: 'draw' }).ok);
+  s._finalize();
+  const v = verifyReplay(s.envelope);
+  assert.ok(v.ok, `${v.error} @${v.mismatchAt}`);
 });
 
 test('replay rejects tampered commands', () => {

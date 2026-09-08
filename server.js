@@ -21,6 +21,9 @@ export function validateSubmission(envelope) {
   if (!envelope || typeof envelope !== 'object') return { accept: false, reason: 'malformed' };
   if (envelope.schema !== 1) return { accept: false, reason: 'stale-version' };
   if (envelope.build > RULES_VERSION) return { accept: false, reason: 'future-version' };
+  // An older build replays against the current rules engine, which may score
+  // differently — spec: reject stale-version scores rather than re-grade them.
+  if ((envelope.build | 0) < RULES_VERSION) return { accept: false, reason: 'stale-version' };
   if (!Array.isArray(envelope.commands) || envelope.commands.length > 5000) {
     return { accept: false, reason: 'bad-command-log' };
   }
@@ -46,7 +49,20 @@ export function validateSubmission(envelope) {
   if (lastMs > 0 && envelope.commands.length / (lastMs / 60000) > MAX_MOVES_PER_MINUTE) {
     return { accept: false, reason: 'rate-implausible' };
   }
-  return { accept: true, detail: { score: totalScore(state), hash: stateHash(state) } };
+  return {
+    accept: true,
+    detail: {
+      // Authoritative values from the replay — hosts must use these (never
+      // the client-declared envelope.result fields) for leaderboard entries.
+      score: totalScore(state),
+      moves: state.moves,
+      invalids: state.invalids,
+      ms: state.elapsedMs,
+      hints: state.hints || 0,
+      undos: state.undos || 0,
+      hash: stateHash(state),
+    },
+  };
 }
 
 /** Deterministic daily descriptor — immutable once published. */
@@ -120,8 +136,16 @@ if (typeof process !== 'undefined' && process.argv?.[1] && import.meta.url.endsW
         }
       });
     } else {
-      // Static file serving for the game client.
-      const rel = normalize(decodeURIComponent(path === '/' ? '/index.html' : path)).replace(/^([/\\])+/, '');
+      // Static file serving for the game client (dotfiles, VCS metadata and
+      // dependencies are never served).
+      let rel;
+      try { rel = normalize(decodeURIComponent(path === '/' ? '/index.html' : path)).replace(/^([/\\])+/, ''); }
+      catch { res.statusCode = 400; res.end('bad request'); return; }
+      if (rel.split(/[\\/]/).some((seg) => seg.startsWith('.') || seg === 'node_modules')) {
+        res.statusCode = 403;
+        res.end('forbidden');
+        return;
+      }
       const file = join(root, rel);
       if (file !== root && !file.startsWith(root.endsWith(sep) ? root : root + sep)) {
         res.statusCode = 403;

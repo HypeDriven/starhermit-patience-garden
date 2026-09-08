@@ -13,6 +13,7 @@ let rng = createRng(1234);
 let ambienceNodes = null;
 let musicTimer = null;
 let started = false;
+let muted = false;
 
 function ensureContext() {
   if (ctx) return ctx;
@@ -20,6 +21,7 @@ function ensureContext() {
   if (!AC) return null;
   ctx = new AC();
   const master = ctx.createGain();
+  master.gain.value = muted ? 0 : 1;
   master.connect(ctx.destination);
   buses = { master };
   for (const name of Object.keys(BUS)) {
@@ -33,7 +35,8 @@ function ensureContext() {
 
 export function initAudio(seed = 1234) {
   rng = createRng(seed >>> 0);
-  ensureContext();
+  // No AudioContext here: creating one before a user gesture trips the
+  // browser autoplay warning. The context is created by unlockAudio().
 }
 
 /** Must be called from a user gesture at least once. */
@@ -48,15 +51,16 @@ export function unlockAudio() {
 }
 
 export function setVolumes(vols) {
-  if (!ensureContext()) return;
   for (const [k, v] of Object.entries(vols)) {
-    if (buses[k]) buses[k].gain.setTargetAtTime(Math.max(0, Math.min(1, v)), ctx.currentTime, 0.05);
+    if (!(k in BUS)) continue;
+    BUS[k] = Math.max(0, Math.min(1, v));
+    if (ctx && buses[k]) buses[k].gain.setTargetAtTime(BUS[k], ctx.currentTime, 0.05);
   }
 }
 
-export function setMuted(muted) {
-  if (!ensureContext()) return;
-  buses.master.gain.setTargetAtTime(muted ? 0 : 1, ctx.currentTime, 0.03);
+export function setMuted(m) {
+  muted = !!m;
+  if (ctx) buses.master.gain.setTargetAtTime(muted ? 0 : 1, ctx.currentTime, 0.03);
 }
 
 // --- synthesis helpers -------------------------------------------------------
@@ -236,8 +240,8 @@ function startMusic() {
   tick();
 }
 
-/** Lower everything while hidden; restore on return. */
+/** Lower everything while hidden; restore on return (preserving mute). */
 export function setBackgrounded(hidden) {
   if (!ctx) return;
-  buses.master.gain.setTargetAtTime(hidden ? 0 : 1, ctx.currentTime, 0.2);
+  buses.master.gain.setTargetAtTime(hidden || muted ? 0 : 1, ctx.currentTime, 0.2);
 }

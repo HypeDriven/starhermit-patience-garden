@@ -618,6 +618,10 @@ export function verifyReplay(envelope) {
     return { ok: false, error: 'initial-hash-mismatch' };
   }
   const seen = new Set();
+  // Periodic hashes are keyed by command index (`at`) when available — turn
+  // numbers are not unique across undo, so turn-keyed hashes can falsely
+  // mismatch. Legacy envelopes carry turn-only hashes; match those by turn.
+  const indexed = envelope.hashes.some((h) => typeof h.at === 'number');
   for (let i = 0; i < envelope.commands.length; i++) {
     const cmd = envelope.commands[i];
     if (cmd.id && seen.has(cmd.id)) continue; // idempotent duplicates
@@ -626,7 +630,9 @@ export function verifyReplay(envelope) {
     const r = applyCommand(state, cmd);
     if (!r.ok) return { ok: false, error: `illegal-command:${r.error}`, mismatchAt: i };
     state = r.state;
-    const expected = envelope.hashes.find((h) => h.turn === state.turn);
+    const expected = indexed
+      ? envelope.hashes.find((h) => h.at === i + 1)
+      : envelope.hashes.find((h) => h.turn === state.turn);
     if (expected && expected.hash !== stateHash(state)) {
       return { ok: false, error: 'hash-mismatch', mismatchAt: i };
     }

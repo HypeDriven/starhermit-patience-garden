@@ -200,7 +200,7 @@ export const CHALLENGES = [
     expectedMinutes: 6,
   },
   {
-    id: 'hundred-moves', name: 'Hundred Moves', theme: 'verdant-canopy',
+    id: 'hundred-moves', name: 'Move Miser', theme: 'verdant-canopy',
     text: 'Win in 150 moves or fewer. Every move is a seed spent.',
     seed: pickSeed('meadow', 'gentle', 0).seed,
     ruleset: { suitCount: 3, targets: PROFILES.meadow.targets },

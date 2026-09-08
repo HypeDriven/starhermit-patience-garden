@@ -127,7 +127,9 @@ export class Session {
     this._resumedAt = this.now();
     this.envelope.commands.push({ ...cmd, id, elapsedMs: this.state.elapsedMs });
     if (this.state.turn % 10 === 0) {
-      this.envelope.hashes.push({ turn: this.state.turn, hash: stateHash(this.state) });
+      // Keyed by command index (`at`), not turn: undo keeps turn monotonic but
+      // not unique, so a turn-keyed hash would falsely mismatch on replay.
+      this.envelope.hashes.push({ at: this.envelope.commands.length, turn: this.state.turn, hash: stateHash(this.state) });
     }
     if (step) {
       this.lessonIndex++;
@@ -189,7 +191,7 @@ export class Session {
       this._resumedAt = this.now();
       this.envelope.commands.push({ type: 'hint', id, elapsedMs: this.state.elapsedMs });
       if (this.state.turn % 10 === 0) {
-        this.envelope.hashes.push({ turn: this.state.turn, hash: stateHash(this.state) });
+        this.envelope.hashes.push({ at: this.envelope.commands.length, turn: this.state.turn, hash: stateHash(this.state) });
       }
     }
     return h;

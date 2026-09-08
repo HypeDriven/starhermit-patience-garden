@@ -66,6 +66,11 @@ export function createUI(handlers) {
     toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2600);
   }
 
+  function hideToast() {
+    clearTimeout(toastTimer);
+    els.toast.classList.remove('show');
+  }
+
   function announce(text) {
     els.announce.textContent = '';
     requestAnimationFrame(() => { els.announce.textContent = text; });
@@ -591,6 +596,7 @@ export function createUI(handlers) {
       <table class="score-table">
         <tr><td>Games played</td><td>${stats.games}</td></tr>
         <tr><td>Wins</td><td>${stats.wins}</td></tr>
+        <tr><td>Losses</td><td>${stats.losses}</td></tr>
         <tr><td>Best streak</td><td>${stats.bestStreak}</td></tr>
         <tr><td>Current streak</td><td>${stats.streak}</td></tr>
         <tr><td>Cards banked</td><td>${stats.foundationsBanked}</td></tr>
@@ -643,7 +649,7 @@ export function createUI(handlers) {
   }
 
   return {
-    els, showScreen, currentScreen, openOverlay, closeOverlay, toast, announce, coach,
+    els, showScreen, currentScreen, openOverlay, closeOverlay, toast, hideToast, announce, coach,
     setTitleInfo, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
     renderJourney, renderLessons, updateHUD, setActions,
     buildBoard, renderBoard2D, sizeBoard2D, setBoard2DVisible,

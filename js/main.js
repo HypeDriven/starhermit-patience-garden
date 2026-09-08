@@ -261,6 +261,30 @@ function normalizeSelection(hit) {
 
 let pendingConfig = null;
 
+/** Persist the in-round snapshot plus the config needed to restart this deal. */
+function saveSnapshot() {
+  if (!session) return;
+  store.saveSessionSnapshot({ ...session.snapshot(), restartConfig: pendingConfig });
+}
+
+/** Best-effort restart config for a restored session lacking one. */
+function configForSession(sess) {
+  const cfg = { mode: sess.mode };
+  if (sess.mode === 'challenge') cfg.challengeId = sess.contentId;
+  else if (sess.mode === 'learn') cfg.lessonId = sess.contentId;
+  else if (sess.mode === 'journey') {
+    const i = JOURNEY.findIndex((s) => s.id === sess.contentId);
+    if (i >= 0) cfg.stage = i;
+  } else if (sess.mode === 'practice') {
+    const m = /^practice-(.+)-(\d+)$/.exec(sess.contentId || '');
+    if (m) { cfg.level = m[1]; cfg.salt = +m[2]; }
+  } else if (sess.mode === 'score') {
+    const m = /^score-(.+)-(.+)-(\d+)$/.exec(sess.contentId || '');
+    if (m) { cfg.scoreProfile = m[1]; cfg.scoreBand = m[2]; }
+  }
+  return cfg;
+}
+
 function setupContext(mode, stageIndex = null) {
   if (mode === 'daily') return { daily: dailyInfo() };
   if (mode === 'challenge') return { challenges: progress.challenges };
@@ -282,6 +306,14 @@ async function startGame() {
   let initialState, opts;
   if (config.mode === 'learn') {
     const lesson = lessonById(config.lessonId);
+    if (!lesson) { // stale config — never wedge on "Dealing…"
+      ui.hideToast();
+      ui.toast('That lesson is unavailable — pick another.', true);
+      ui.showScreen('learn');
+      refreshScreens();
+      appState = 'title';
+      return;
+    }
     initialState = createCustomGame(lesson.layout, lesson.ruleset, 0);
     opts = {
       mode: 'learn', contentId: lesson.id, seed: 0, ruleset: initialState.ruleset,
@@ -297,6 +329,15 @@ async function startGame() {
     else {
       if (config.salt === undefined) config.salt = stats.games; // pin deal so Replay is identical
       descriptor = practiceDeal(config.level || 'easy', config.salt);
+    }
+
+    if (!descriptor) { // unknown content (e.g. stale config) — never wedge on "Dealing…"
+      ui.hideToast();
+      ui.toast('That table is unavailable — pick another.', true);
+      ui.showScreen('modes');
+      refreshScreens();
+      appState = 'title';
+      return;
     }
 
     const { layout } = generateWinnableLayout(descriptor.seed, descriptor.ruleset);
@@ -324,7 +365,7 @@ async function startGame() {
   session._journeyStage = opts.journeyStage || null;
   selection = null;
   hintShown = null;
-  store.saveSessionSnapshot(session.snapshot());
+  saveSnapshot();
 
   ui.showScreen('game');
   ui.setBoard2DVisible(boardIs2D());
@@ -334,6 +375,7 @@ async function startGame() {
   refreshBoard(true);
   updateCoach();
   updateHUDFull();
+  ui.hideToast(); // the "Dealing…" notice must not linger over active play
   ui.setRailsCollapsed(matchMedia('(max-width: 1023px)').matches);
 
   const names = { learn: 'Lesson', journey: 'Journey', daily: 'Daily', practice: 'Practice', challenge: 'Challenge', score: 'Score Chase' };
@@ -373,7 +415,7 @@ function pauseGame() {
   ui.openOverlay('pause');
   $('btn-resume').focus();
   appState = 'paused';
-  store.saveSessionSnapshot(session.snapshot());
+  saveSnapshot();
 }
 
 function resumeGame() {
@@ -599,7 +641,7 @@ function afterDispatch(events) {
   refreshBoard();
   updateCoach();
   updateHUDFull();
-  store.saveSessionSnapshot(session.snapshot());
+  saveSnapshot();
 
   if (session.mode === 'learn') {
     if (!session.currentStep()) finishLesson();
@@ -730,6 +772,7 @@ function finishRound() {
     stats.bestScore = Math.max(stats.bestScore, b.total);
     if (stats.bestWinMs == null || b.ms < stats.bestWinMs) stats.bestWinMs = b.ms;
   } else {
+    stats.losses += 1;
     stats.streak = 0;
   }
 
@@ -900,8 +943,9 @@ function kbAnnounce() {
 document.addEventListener('keydown', (e) => {
   // global overlay handling
   if (e.key === 'Escape') {
-    if (!document.getElementById('screen-settings').hidden) { ui.closeOverlay('settings'); return; }
-    if (!document.getElementById('screen-help').hidden) { ui.closeOverlay('help'); return; }
+    for (const ov of ['settings', 'help', 'profile', 'scores']) {
+      if (!document.getElementById(`screen-${ov}`).hidden) { ui.closeOverlay(ov); return; }
+    }
     if (appState === 'active') { pauseGame(); return; }
     if (appState === 'paused') { resumeGame(); return; }
     return;
@@ -962,7 +1006,7 @@ setInterval(() => {
 }, 1000);
 
 setInterval(() => {
-  if (session && !session.isFinished()) store.saveSessionSnapshot(session.snapshot());
+  if (session && !session.isFinished()) saveSnapshot();
 }, 8000);
 
 document.addEventListener('visibilitychange', () => {
@@ -1056,7 +1100,12 @@ async function resumeSavedGame() {
   if (!snap) return false;
   session = Session.restore(snap, () => Date.now());
   if (!session) return false;
-  pendingConfig = { mode: session.mode };
+  pendingConfig = snap.restartConfig || configForSession(session);
+  // Journey progress is keyed from the stage descriptor, which the snapshot
+  // does not carry — re-derive it so a resumed win still records stars.
+  session._journeyStage = session.mode === 'journey'
+    ? JOURNEY.find((s) => s.id === session.contentId) || null
+    : null;
   ui.showScreen('game');
   ui.setBoard2DVisible(boardIs2D());
   await ensureRenderer();
