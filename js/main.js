@@ -923,6 +923,29 @@ let kbActive = false;
 
 function kbTarget() { return KB_ORDER[kbFocus]; }
 
+function kbMove(k) {
+  kbActive = true;
+  const row = kbFocus <= 5 ? 0 : 1;
+  if (k === 'arrowleft') kbFocus = Math.max(row === 0 ? 0 : 6, kbFocus - 1);
+  if (k === 'arrowright') kbFocus = Math.min(row === 0 ? 5 : 12, kbFocus + 1);
+  if (k === 'arrowdown' && row === 0) kbFocus = 6 + Math.min(6, Math.max(0, kbFocus - 0));
+  if (k === 'arrowup' && row === 1) kbFocus = Math.min(5, kbFocus - 6);
+  kbAnnounce();
+}
+
+function kbConfirm() {
+  kbActive = true;
+  const t = kbTarget();
+  if (t.zone === 'tableau') {
+    const pile = session.state.tableau[t.pile];
+    handleTap({ zone: 'tableau', pile: t.pile, index: pile.length - 1 });
+  } else if (t.zone === 'waste') {
+    handleTap({ zone: 'waste', pile: 0, index: session.state.waste.length - 1 });
+  } else {
+    handleTap(t);
+  }
+}
+
 function kbAnnounce() {
   const t = kbTarget();
   const s = session?.state;
@@ -955,27 +978,12 @@ document.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
     if (k === 'arrowleft' || k === 'arrowright' || k === 'arrowup' || k === 'arrowdown') {
       e.preventDefault();
-      kbActive = true;
-      const row = kbFocus <= 5 ? 0 : 1;
-      if (k === 'arrowleft') kbFocus = Math.max(row === 0 ? 0 : 6, kbFocus - 1);
-      if (k === 'arrowright') kbFocus = Math.min(row === 0 ? 5 : 12, kbFocus + 1);
-      if (k === 'arrowdown' && row === 0) kbFocus = 6 + Math.min(6, Math.max(0, kbFocus - 0));
-      if (k === 'arrowup' && row === 1) kbFocus = Math.min(5, kbFocus - 6);
-      kbAnnounce();
+      kbMove(k);
       return;
     }
     if (k === 'enter' || k === ' ') {
       e.preventDefault();
-      kbActive = true;
-      const t = kbTarget();
-      if (t.zone === 'tableau') {
-        const pile = session.state.tableau[t.pile];
-        handleTap({ zone: 'tableau', pile: t.pile, index: pile.length - 1 });
-      } else if (t.zone === 'waste') {
-        handleTap({ zone: 'waste', pile: 0, index: session.state.waste.length - 1 });
-      } else {
-        handleTap(t);
-      }
+      kbConfirm();
       return;
     }
     if (k === 'd') { e.preventDefault(); tryDispatch({ type: 'draw' }); return; }
@@ -984,6 +992,52 @@ document.addEventListener('keydown', (e) => {
     if (k === 'a') { e.preventDefault(); if (session.canAutoFinish()) tryDispatch({ type: 'autofinish' }); return; }
   }
 });
+
+// ---------------------------------------------------------------------------
+// Gamepad: dpad/left-stick navigate focus, A confirm, B cancel, X undo,
+// Y hint, Start pause — the same actions as the keyboard layer.
+// ---------------------------------------------------------------------------
+
+const padPrev = {};
+const padHeldAt = {};
+
+setInterval(() => {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  const gp = pads && pads[0];
+  if (!gp) { for (const k of Object.keys(padPrev)) padPrev[k] = false; return; }
+  const pressed = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
+  const axis = (i) => gp.axes[i] || 0;
+  const now = Date.now();
+  const edge = (name, v) => { const was = padPrev[name]; padPrev[name] = v; return v && !was; };
+  // held directions repeat: delay 350 ms, then every 140 ms
+  const repeat = (name, v) => {
+    if (!v) { padPrev[name] = false; delete padHeldAt[name]; return false; }
+    if (edge(name, v)) { padHeldAt[name] = now; return true; }
+    const held = padHeldAt[name] ?? now;
+    if (now - held >= 350 && now - (padHeldAt[`${name}:last`] ?? 0) >= 140) {
+      padHeldAt[`${name}:last`] = now;
+      return true;
+    }
+    return false;
+  };
+
+  if (edge('start', pressed(9))) {
+    if (appState === 'active') { pauseGame(); return; }
+    if (appState === 'paused') { resumeGame(); return; }
+  }
+  if (!session || ui.currentScreen() !== 'game') return;
+  if (edge('a', pressed(0))) kbConfirm();
+  if (edge('b', pressed(1))) {
+    if (selection) { clearSelection(); refreshBoard(); }
+    else if (appState === 'active') pauseGame();
+  }
+  if (edge('x', pressed(2))) doUndo();
+  if (edge('y', pressed(3))) doHint();
+  if (repeat('left', pressed(14) || axis(0) < -0.5)) kbMove('arrowleft');
+  if (repeat('right', pressed(15) || axis(0) > 0.5)) kbMove('arrowright');
+  if (repeat('up', pressed(12) || axis(1) < -0.5)) kbMove('arrowup');
+  if (repeat('down', pressed(13) || axis(1) > 0.5)) kbMove('arrowdown');
+}, 120);
 
 // ---------------------------------------------------------------------------
 // Clock tick, autosave, daily countdown, visibility

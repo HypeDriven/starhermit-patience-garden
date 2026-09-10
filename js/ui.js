@@ -583,6 +583,7 @@ export function createUI(handlers) {
       <div class="rule-card"><div class="demo">❀</div><div><h4>Auto-finish</h4><p>When nothing is hidden and the stock is empty, Auto-finish (<kbd>A</kbd>) banks everything for you.</p></div></div>
       <h3>Controls</h3>
       <div class="rule-card"><div class="demo">⌨</div><div><h4>Keyboard</h4><p>Arrows move focus between piles · <kbd>Enter</kbd>/<kbd>Space</kbd> select or place · <kbd>D</kbd> draw · <kbd>U</kbd> undo · <kbd>H</kbd> hint · <kbd>A</kbd> auto-finish · <kbd>Esc</kbd> pause.</p></div></div>
+      <div class="rule-card"><div class="demo">🎮</div><div><h4>Gamepad</h4><p>D-pad or left stick moves focus · A selects or places · B cancels or pauses · X undo · Y hint · Start pauses.</p></div></div>
       <div class="rule-card"><div class="demo">👆</div><div><h4>Pointer &amp; touch</h4><p>Tap a card to select, tap a target to place — or drag runs directly. Double-tap banks to a foundation. Tap the stock to draw.</p></div></div>
       <div class="rule-card"><div class="demo">✦</div><div><h4>Assists</h4><p>Undo and Hint are always available in Practice and Journey. Assisted runs are flagged on the board.</p></div></div>`;
   }
