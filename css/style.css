@@ -81,6 +81,8 @@ button { font: inherit; }
 .title-grid small { color: var(--text-dim); }
 .title-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .build-note { margin-top: 16px; font-size: 0.72rem; color: var(--text-dim); }
+.player-line { margin: 14px 0 0; font-size: 0.85rem; }
+.player-line .dim { font-size: 0.72rem; }
 
 /* ------------------------------ buttons ---------------------------------- */
 

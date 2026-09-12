@@ -177,6 +177,7 @@ onto any foundation until it held 13. The unit suite's foundation-banking tests 
 
 - `js/render3d.js` (68 KB) beyond "it boots and draws without errors" — headless SwiftShader
   cannot judge the visual acceptance criteria in spec.md §4.
-- The `/api/v1/validate` endpoint against a genuine full-game envelope: the client never produces
-  one, so no reference envelope exists to submit.
+- The `/api/v1/validate` round trip against the live hosted platform: the client now submits a
+  genuine full-game envelope for Daily / Score Chase results (js/main.js `submitRankedReplay`),
+  but hosted acceptance still needs a platform-side run; locally it falls back gracefully.
 - Touch and gamepad input paths.

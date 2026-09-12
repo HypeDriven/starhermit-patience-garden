@@ -83,6 +83,8 @@ export const loadProgress = () => read('progress', DEFAULT_PROGRESS);
 export const saveProgress = (p) => write('progress', p);
 export const loadStats = () => read('stats', DEFAULT_STATS);
 export const saveStats = (s) => write('stats', s);
+export const saveAchievements = (a) => write('achievements', a);
+export const saveScores = (s) => write('scores', s);
 
 export function loadAchievements() {
   return read('achievements', DEFAULT_ACHIEVEMENTS);
@@ -95,6 +97,13 @@ export function unlockAchievement(key) {
   doc.unlocked[key] = Date.now();
   write('achievements', doc);
   return true;
+}
+
+/** Preserve the local documents before a conflicting remote cloud doc replaces them. */
+export function backupLocalDocs(docs) {
+  try {
+    localStorage.setItem(PREFIX + 'local-backup', JSON.stringify(wrap({ version: 1, ...docs })));
+  } catch { /* ignore */ }
 }
 
 // --- in-round session snapshot (resume after reload/background) ------------

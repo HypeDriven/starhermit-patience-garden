@@ -127,6 +127,15 @@ export function createUI(handlers) {
     $('build-note').textContent = buildNote;
   }
 
+  // Hosted identity slot: platform nickname + cloud sync status (hidden locally).
+  function setPlayerInfo(name, syncLabel) {
+    const line = $('player-line');
+    if (!name) { line.hidden = true; return; }
+    line.hidden = false;
+    $('player-name').textContent = name;
+    $('sync-status').textContent = syncLabel ? `· ${syncLabel}` : '';
+  }
+
   function renderModes() {
     const host = $('mode-list');
     host.innerHTML = '';
@@ -590,9 +599,11 @@ export function createUI(handlers) {
 
   // ---- profile / scores -------------------------------------------------------------
 
-  function renderProfile(stats, achievements, progress) {
+  function renderProfile(stats, achievements, progress, playerName = null) {
     const lessonsDone = Object.keys(progress.lessons).length;
     $('profile-body').innerHTML = `
+      <h3 id="profile-player-h" hidden>Gardener</h3>
+      <p id="profile-player" hidden></p>
       <h3>Career</h3>
       <table class="score-table">
         <tr><td>Games played</td><td>${stats.games}</td></tr>
@@ -613,21 +624,50 @@ export function createUI(handlers) {
         return `<div class="rule-card"><div class="demo">${un ? '❀' : '·'}</div><div>
           <h4>${a.name} ${un ? '<span class="dim">✓</span>' : ''}</h4><p>${a.text}</p></div></div>`;
       }).join('')}`;
+    const head = $('profile-player-h');
+    const line = $('profile-player');
+    if (playerName) {
+      head.hidden = false;
+      line.hidden = false;
+      line.textContent = `❀ ${playerName}`;
+    }
   }
 
-  function renderScores(entries) {
+  function renderScores(entries, globalBoards = null) {
     const host = $('scores-body');
-    if (!entries.length) {
+    if (!entries.length && !globalBoards) {
       host.innerHTML = '<p class="dim">No results yet. Play the Daily or a Score Chase table.</p>';
       return;
     }
     const byMode = {};
     for (const e of entries) (byMode[e.mode] ||= []).push(e);
-    host.innerHTML = Object.entries(byMode).map(([mode, list]) => `
-      <h3>${mode}</h3>
+    let html = Object.entries(byMode).map(([mode, list]) => `
+      <h3>${globalBoards ? `${mode} — local` : mode}</h3>
       <table class="score-table">
         ${list.slice(0, 10).map((e, i) => `<tr><td>${i + 1}. ${e.score} pts</td><td class="dim">${e.moves} moves · ${fmtTime(e.ms)}${e.assists ? ' · assists' : ''}</td></tr>`).join('')}
       </table>`).join('');
+    if (globalBoards) {
+      for (const board of globalBoards) {
+        html += `<h3>${board.title}</h3>`;
+        if (!board.rows.length) html += '<p class="dim">No entries yet.</p>';
+        else {
+          html += `<table class="score-table">
+            ${board.rows.map((r) => `<tr><td>${r.rank}. <span class="board-name"></span> — ${r.score} pts</td><td class="dim">${r.detail || ''}</td></tr>`).join('')}
+          </table>`;
+        }
+      }
+    }
+    host.innerHTML = html;
+    if (globalBoards) {
+      // Nicknames arrive resolved from the platform; insert as text, never HTML.
+      let i = 0;
+      for (const board of globalBoards) {
+        for (const r of board.rows) {
+          const slot = host.querySelectorAll('.board-name')[i++];
+          if (slot) slot.textContent = r.name;
+        }
+      }
+    }
   }
 
   // ---- misc --------------------------------------------------------------------------
@@ -651,7 +691,7 @@ export function createUI(handlers) {
 
   return {
     els, showScreen, currentScreen, openOverlay, closeOverlay, toast, hideToast, announce, coach,
-    setTitleInfo, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
+    setTitleInfo, setPlayerInfo, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
     renderJourney, renderLessons, updateHUD, setActions,
     buildBoard, renderBoard2D, sizeBoard2D, setBoard2DVisible,
     renderResults, renderSettings, renderHelp, renderProfile, renderScores,

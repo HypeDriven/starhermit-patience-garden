@@ -15,6 +15,7 @@ import {
 } from './content.js';
 import * as store from './storage.js';
 import * as audio from './audio.js';
+import * as platform from './platform.js';
 import { createUI, fmtTime } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -85,8 +86,16 @@ const ui = createUI({
     startGame();
   },
   onLessonPick: (lessonId) => { pendingConfig = { mode: 'learn', lessonId }; startGame(); },
-  onShowProfile: () => { ui.renderProfile(stats, store.loadAchievements(), progress); ui.openOverlay('profile'); },
-  onShowScores: () => { ui.renderScores(store.loadScores().entries); ui.openOverlay('scores'); },
+  onShowProfile: () => { ui.renderProfile(stats, store.loadAchievements(), progress, platform.nickname()); ui.openOverlay('profile'); },
+  onShowScores: () => {
+    ui.renderScores(store.loadScores().entries);
+    ui.openOverlay('scores');
+    loadGlobalBoards().then((boards) => {
+      if (boards && !document.getElementById('screen-scores').hidden) {
+        ui.renderScores(store.loadScores().entries, boards);
+      }
+    });
+  },
   onBoardTap: (target) => handleTap(target),
   onBoardDbl: (target) => handleDouble(target),
   onDraw: () => tryDispatch({ type: 'draw' }),
@@ -112,6 +121,7 @@ function applySetting(key, value) {
   obj[parts[parts.length - 1]] = value;
   store.saveSettings(settings);
   applySettings();
+  mirrorCloud();
   track('settings-change', { key });
 }
 
@@ -739,6 +749,7 @@ function finishLesson() {
     store.saveSettings(settings);
   }
   track('tutorial-step', { lesson: lessonId, done: true });
+  mirrorCloud();
   const lessonIndex = LESSONS.findIndex((l) => l.id === lessonId);
   const next = LESSONS[lessonIndex + 1];
   ui.renderResults({
@@ -840,6 +851,7 @@ function finishRound() {
 
   store.saveProgress(progress);
   store.saveStats(stats);
+  mirrorCloud();
   track('round-end', { mode: session.mode, won, moves: b.moves });
 
   ui.renderResults({
@@ -853,6 +865,7 @@ function finishRound() {
     achievements: newly,
     nextLabel: nextLabel || (session.mode !== 'journey' ? 'New deal' : null),
   });
+  submitRankedReplay();
 }
 
 function resultsAction(action) {
@@ -1055,8 +1068,8 @@ setInterval(() => {
     ui.updateHUD({ ms: session.elapsedMs() });
     if (session.constraint?.type === 'time') updateHUDFull();
   }
-  // daily countdown (setup screen)
-  ui.updateDailyCountdown(msUntilNextDaily());
+  // daily countdown (setup screen) — server time when hosted, local otherwise
+  ui.updateDailyCountdown(msUntilNextDaily(platform.serverNow()));
 }, 1000);
 
 setInterval(() => {
@@ -1112,10 +1125,98 @@ function track(event, data = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// StarHermit platform (hosted mode only): account identity, cloud mirror of
+// the local save documents, validated ranked replays, read-only global board.
+// Without a launch token none of this runs and play is purely local.
+// ---------------------------------------------------------------------------
+
+const SYNC_LABELS = { syncing: 'saving…', synced: 'cloud saved', error: 'cloud save failed' };
+const SAVE_DOC_KEYS = ['settings', 'progress', 'stats', 'achievements', 'scores'];
+
+function currentSaveDoc() {
+  return {
+    version: 1,
+    savedAt: Date.now(),
+    settings: store.loadSettings(),
+    progress: store.loadProgress(),
+    stats: store.loadStats(),
+    achievements: store.loadAchievements(),
+    scores: store.loadScores(),
+  };
+}
+
+/** Debounced PUT of the save documents to the cloud slot (localStorage stays the cache). */
+function mirrorCloud() {
+  platform.queueCloudSave(currentSaveDoc());
+}
+
+function updatePlayerLine() {
+  const name = platform.nickname();
+  ui.setPlayerInfo(name, name ? (SYNC_LABELS[platform.syncStatus()] || '') : null);
+}
+
+/** Remote-preferred load: adopt the cloud doc, preserving the replaced local one. */
+function applyRemoteDoc(doc) {
+  const local = currentSaveDoc();
+  const differs = SAVE_DOC_KEYS.some((k) => JSON.stringify(local[k]) !== JSON.stringify(doc[k]));
+  if (!differs) return;
+  store.backupLocalDocs(local);
+  store.saveSettings(doc.settings);
+  store.saveProgress(doc.progress);
+  store.saveStats(doc.stats);
+  store.saveAchievements(doc.achievements);
+  store.saveScores(doc.scores);
+  for (const k of Object.keys(settings)) delete settings[k];
+  Object.assign(settings, structuredClone(doc.settings));
+  progress = store.loadProgress();
+  stats = store.loadStats();
+  applySettings();
+  refreshScreens();
+  if (session) updateHUDFull();
+}
+
+function bootPlatform() {
+  const boot = platform.initPlatform();
+  if (!boot.hosted) return;
+  platform.onSyncStatus(updatePlayerLine);
+  boot.ready.then((remoteDoc) => {
+    if (remoteDoc) applyRemoteDoc(remoteDoc);
+    updatePlayerLine();
+  });
+}
+
+// Ranked boards (Daily / Score Chase): hand the replay envelope to the
+// authoritative validator. Unreachable or rejected → the result stays local
+// and the board is casual, per spec.
+function submitRankedReplay() {
+  if (session.mode !== 'daily' && session.mode !== 'score') return;
+  const note = $('results-progress');
+  if (!note) return;
+  const baseNote = note.textContent;
+  platform.validateReplay(session.envelope).then((v) => {
+    const resultsOpen = !document.getElementById('screen-results').hidden;
+    if (!resultsOpen) return;
+    if (v.ok && v.accepted) note.textContent = `${baseNote} · validated ✓`;
+    else if (v.ok) note.textContent = `${baseNote} · not validated (${v.reason}) — kept local`;
+  });
+}
+
+// Read-only global board for the scores overlay; local records always shown.
+function loadGlobalBoards() {
+  if (!platform.isHosted()) return Promise.resolve(null);
+  return platform.leaderboardInfo().then(async (info) => {
+    if (!info) return null;
+    const rows = await platform.leaderboardEntries(info.id).catch(() => null);
+    return rows ? [{ title: 'Global', rows }] : null;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 
 function init() {
+  bootPlatform();
   audio.initAudio(2024);
   ui.renderSettings(settings);
   ui.renderHelp();
