@@ -210,6 +210,9 @@ kbd { background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--tex
 /* --------------------------- 2D DOM board --------------------------------- */
 
 #board-dom { display: grid; grid-template-rows: auto 1fr; gap: calc(var(--card-w) * 0.18); padding: 12px; align-content: start; }
+/* display:grid above would otherwise beat the UA [hidden] rule and leave an
+   invisible board intercepting every 3D card tap */
+#board-dom[hidden] { display: none !important; }
 .dom-row { display: flex; gap: calc(var(--card-w) * 0.14); justify-content: center; }
 .dom-tableau { align-items: flex-start; }
 .pile-slot {

@@ -138,13 +138,15 @@ function drawLaurel(ctx, cx, cy, radius, color) {
 }
 
 function drawCorner(ctx, x, y, label, glyph, ink) {
+  // Larger index than a printed deck: the exposed strip of a stacked card is
+  // all a phone player sees, so rank and suit must read at ~40px card widths.
   ctx.fillStyle = ink;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '700 42px Georgia, "Times New Roman", serif';
+  ctx.font = '700 54px Georgia, "Times New Roman", serif';
   ctx.fillText(label, x, y);
-  ctx.font = '38px Georgia, "DejaVu Sans", serif';
-  ctx.fillText(glyph, x, y + 40);
+  ctx.font = '46px Georgia, "DejaVu Sans", serif';
+  ctx.fillText(glyph, x + (label.length > 1 ? 62 : 52), y);
 }
 
 function paintFaceTexture(cardId) {
@@ -175,9 +177,9 @@ function paintFaceTexture(cardId) {
   ctx.stroke();
 
   // corner indices (both orientations)
-  drawCorner(ctx, 33, 42, label, glyph, ink);
+  drawCorner(ctx, 36, 40, label, glyph, ink);
   ctx.save();
-  ctx.translate(W - 33, H - 42);
+  ctx.translate(W - 36, H - 40);
   ctx.rotate(Math.PI);
   drawCorner(ctx, 0, 0, label, glyph, ink);
   ctx.restore();
@@ -1651,8 +1653,11 @@ export function createRenderer(opts) {
     // with margin. Vertical screen extent maps to world depth compressed by
     // sin(elevation); on narrow/portrait aspects the width term dominates and
     // simply pulls the camera back until all 7 columns fit.
-    const boardW = 8.32 + 2.2;
-    const boardD = (5.3 + fitBottomZ) * Math.sin(TILT) + 2.3;
+    // Narrow viewports get a tighter margin so the 7 columns use the width
+    // (the decorative glasshouse is not framed on phones).
+    const narrow = camera.aspect < 0.9;
+    const boardW = 8.32 + (narrow ? 0.7 : 2.2);
+    const boardD = (5.3 + fitBottomZ) * Math.sin(TILT) + (narrow ? 1.2 : 2.3);
     const tanHalf = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const d = Math.max(boardW / (2 * tanHalf * camera.aspect), boardD / (2 * tanHalf));
     camTarget.z = (Z_TOP - 0.7 + fitBottomZ) / 2 - 0.3; // slight bias: glasshouse headroom at top
