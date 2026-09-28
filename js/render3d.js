@@ -7,7 +7,17 @@
 //
 // Export: createRenderer(opts) -> renderer  (see README of the API below).
 
-import * as THREE from '../vendor/three.module.js';
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { resolve as resolveGraphics, detectPreset, describe, SHADOW_MAP } from './gfx.js';
 
 // ---------------------------------------------------------------------------
 // Constants — card metrics, layout, art palette
@@ -37,7 +47,8 @@ const SUIT_GLYPHS = ['\u2660', '\u2665', '\u2666', '\u2663']; // ♠ ♥ ♦ ♣
 const INK_RED = '#b03428';
 const INK_BLACK = '#262630';
 
-const TILT = 0.88;            // camera elevation from horizontal (radians, ~50°)
+const TILT = 0.88;
+const BLOOM_THRESHOLD = 2.4;  // linear HDR luminance (see buildPost)            // camera elevation from horizontal (radians, ~50°)
 
 // ---------------------------------------------------------------------------
 // Small utilities (no per-frame allocation: temps live at module scope)
@@ -370,16 +381,53 @@ function paintStockSlotTexture() {
 }
 
 function paintSkyTexture(theme) {
-  const cv = makeCanvas(32, 512);
+  // Garden beyond the glass: sky gradient, a low warm sun glow and two hazy
+  // tree lines (far and near) so the glasshouse panes frame a landscape.
+  const W = 512, H = 256;
+  const cv = makeCanvas(W, H);
   const ctx = cv.getContext('2d');
-  const g = ctx.createLinearGradient(0, 0, 0, 512);
-  // warm theme glow sits low (the visible horizon band behind the glasshouse)
-  g.addColorStop(0, shade(theme.sky[1], -0.15));
-  g.addColorStop(0.55, theme.sky[1]);
-  g.addColorStop(0.88, theme.sky[0]);
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, shade(theme.sky[1], -0.2));
+  g.addColorStop(0.4, theme.sky[1]);
+  g.addColorStop(0.66, theme.sky[0]);
   g.addColorStop(1, theme.sky[0]);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 32, 512);
+  ctx.fillRect(0, 0, W, H);
+  const sun = ctx.createRadialGradient(W * 0.3, H * 0.64, 2, W * 0.3, H * 0.64, H * 0.4);
+  sun.addColorStop(0, 'rgba(255,246,222,0.85)');
+  sun.addColorStop(0.18, 'rgba(255,236,196,0.35)');
+  sun.addColorStop(1, 'rgba(255,236,196,0)');
+  ctx.fillStyle = sun;
+  ctx.fillRect(0, 0, W, H);
+  const rnd = mulberry32(31);
+  const treeLine = (base, amp, color, step) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W + step; x += step) {
+      const y = base - amp * (0.35 + rnd() * 0.65);
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    ctx.fill();
+    // rounded crowns along the ridge
+    for (let x = 0; x <= W; x += step * 0.7) {
+      const r = step * (0.5 + rnd() * 0.5);
+      ctx.beginPath();
+      ctx.arc(x, base - amp * (0.3 + rnd() * 0.6), r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  };
+  const haze = (hex, amt) => {
+    const a = parseInt(hex.slice(1), 16), b = parseInt(theme.sky[0].slice(1), 16);
+    const mix = (s) => Math.round(((a >> s) & 255) * (1 - amt) + ((b >> s) & 255) * amt);
+    return `rgb(${mix(16)},${mix(8)},${mix(0)})`;
+  };
+  treeLine(H * 0.7, 16, haze(theme.leaf, 0.55), 16);
+  treeLine(H * 0.745, 12, haze(theme.leaf, 0.3), 11);
+  ctx.fillStyle = haze(shade(theme.leaf, -0.2), 0.25);
+  ctx.fillRect(0, H * 0.75, W, H);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
@@ -411,6 +459,125 @@ function paintPetalTexture(theme) {
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+// --- "Detailed" surface textures (graphics setting `detail`) -----------------
+
+function paintNoiseBumpTexture(size, seed, strokes) {
+  // Grey value noise with short fibre strokes: a bump map for felt nap / paper tooth.
+  const cv = makeCanvas(size, size);
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, size, size);
+  const rnd = mulberry32(seed);
+  for (let i = 0; i < strokes; i++) {
+    const x = rnd() * size, y = rnd() * size, a = rnd() * Math.PI, l = 2 + rnd() * 5;
+    const v = 96 + Math.floor(rnd() * 64);
+    ctx.strokeStyle = `rgb(${v},${v},${v})`;
+    ctx.lineWidth = 0.8 + rnd();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function paintWoodTexture() {
+  // Near-white grain so the theme's table colour still tints the wood.
+  const W = 512, H = 512;
+  const cv = makeCanvas(W, H);
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#f2ece4';
+  ctx.fillRect(0, 0, W, H);
+  const rnd = mulberry32(7);
+  for (let i = 0; i < 90; i++) {
+    const y0 = rnd() * H;
+    const amp = 4 + rnd() * 14, freq = 0.004 + rnd() * 0.01, ph = rnd() * 6.28;
+    const dark = rnd() > 0.35;
+    ctx.strokeStyle = dark ? `rgba(70,40,20,${0.05 + rnd() * 0.12})` : `rgba(255,240,220,${0.05 + rnd() * 0.08})`;
+    ctx.lineWidth = 0.6 + rnd() * 2.4;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 8) {
+      const y = y0 + Math.sin(x * freq + ph) * amp + Math.sin(x * freq * 3.1 + ph) * amp * 0.25;
+      if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  // a couple of knots
+  for (let k = 0; k < 3; k++) {
+    const x = 60 + rnd() * (W - 120), y = 60 + rnd() * (H - 120);
+    for (let r = 3; r < 26; r += 3) {
+      ctx.strokeStyle = `rgba(70,40,20,${0.16 - r * 0.005})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r * 2.2, r * 0.8, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function paintWindowLightTexture() {
+  // Sunlight through the glasshouse roof: soft-edged panes split by mullions,
+  // broken up by leaf dapple. White on black; used additively, tinted warm.
+  const S = 512;
+  const cv = makeCanvas(S, S);
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, S, S);
+  ctx.filter = 'blur(10px)';
+  ctx.fillStyle = '#fff';
+  const cols = 3, rows = 2, bar = 16, m = 40;
+  const pw = (S - 2 * m - (cols - 1) * bar) / cols, ph = (S - 2 * m - (rows - 1) * bar) / rows;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      ctx.globalAlpha = 0.75 + ((r * 3 + c) % 3) * 0.1;
+      ctx.fillRect(m + c * (pw + bar), m + r * (ph + bar), pw, ph);
+    }
+  }
+  // leaf dapple: dark soft blobs knock holes into the light
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#000';
+  const rnd = mulberry32(23);
+  for (let i = 0; i < 18; i++) {
+    ctx.globalAlpha = 0.3 + rnd() * 0.35;
+    ctx.beginPath();
+    ctx.ellipse(rnd() * S, rnd() * S, 14 + rnd() * 34, 8 + rnd() * 20, rnd() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.filter = 'none';
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Colour grade + vignette (display-space in, display-space out; runs after OutputPass).
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uAmount: { value: 1.0 }, uVignette: { value: 0.26 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uAmount; uniform float uVignette;
+    varying vec2 vUv;
+    void main() {
+      vec4 src = texture2D(tDiffuse, vUv);
+      vec3 c = clamp(src.rgb, 0.0, 1.0);
+      // gentle S-curve, a touch more saturation, warm highlights / cool greens in shadow
+      vec3 s = mix(c, c * c * (3.0 - 2.0 * c), 0.28);
+      float l = dot(s, vec3(0.299, 0.587, 0.114));
+      s = mix(vec3(l), s, 1.14);
+      s *= mix(vec3(0.97, 1.0, 1.03), vec3(1.04, 1.01, 0.95), smoothstep(0.25, 0.85, l));
+      c = mix(c, s, uAmount);
+      float d = length((vUv - 0.5) * vec2(1.1, 1.0));
+      c *= 1.0 - uVignette * smoothstep(0.38, 0.9, d);
+      gl_FragColor = vec4(c, src.a);
+    }`,
+};
 
 // lighten/darken a #rrggbb colour by amount in [-1, 1]
 function shade(hex, amt) {
@@ -494,7 +661,9 @@ function frameShape(w, h, r, inset) {
 export function createRenderer(opts) {
   const canvas = opts.canvas;
   let theme = opts.theme;
-  let quality = opts.quality || 'medium';
+  const detected = opts.detected || 'balanced';
+  let gfxSaved = opts.graphics || {};
+  let q = resolveGraphics(gfxSaved, detected); // resolved graphics tiers (gfx.js)
   let reducedMotion = !!opts.reducedMotion;
   const rng = mulberry32(opts.seed || 1);
 
@@ -508,9 +677,16 @@ export function createRenderer(opts) {
   }
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
-  renderer.shadowMap.enabled = true;
+  renderer.toneMappingExposure = 1.1;
+  renderer.shadowMap.enabled = SHADOW_MAP[q.shadows] > 0;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const gpu = (() => {
+    try {
+      const gl = renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      return String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
+    } catch { return ''; }
+  })();
   renderer.info.autoReset = false; // stats() reads counts after render; reset per frame
 
   const scene = new THREE.Scene();
@@ -522,17 +698,34 @@ export function createRenderer(opts) {
   const hemi = new THREE.HemisphereLight(theme.sky[0], '#3a2f26', 0.65);
   scene.add(hemi);
 
+  // Key light: warm late-afternoon sun through the glasshouse roof. Its shadow
+  // frustum is fitted to the table top (12.6 x 15.2 slab centred at z=-0.45)
+  // as seen from the light, so every shadow-map texel lands on the play area.
   const keyLight = new THREE.DirectionalLight('#ffd9a8', 1.7);
-  keyLight.position.set(6, 12, 5);
-  keyLight.castShadow = quality === 'high';
-  keyLight.shadow.mapSize.set(2048, 2048);
-  keyLight.shadow.camera.left = -9; keyLight.shadow.camera.right = 9;
-  keyLight.shadow.camera.top = 9; keyLight.shadow.camera.bottom = -9;
-  keyLight.shadow.camera.near = 2; keyLight.shadow.camera.far = 32;
+  keyLight.target.position.set(0, 0, -0.45);
+  keyLight.position.set(6, 12, 4.55);
+  keyLight.castShadow = SHADOW_MAP[q.shadows] > 0;
+  keyLight.shadow.mapSize.set(SHADOW_MAP[q.shadows] || 1024, SHADOW_MAP[q.shadows] || 1024);
+  keyLight.shadow.camera.left = -7.4; keyLight.shadow.camera.right = 7.4;
+  keyLight.shadow.camera.top = 7.2; keyLight.shadow.camera.bottom = -7.2;
+  keyLight.shadow.camera.near = 6; keyLight.shadow.camera.far = 22;
   keyLight.shadow.bias = -0.0004;
   keyLight.shadow.normalBias = 0.02;
   scene.add(keyLight);
   scene.add(keyLight.target);
+
+  // Image-based lighting (graphics setting `reflections`): a prefiltered
+  // RoomEnvironment gives the lacquered cards, iron and glass soft reflections.
+  let envTex = null;
+  function ensureEnvironment() {
+    if (envTex) return envTex;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const room = new RoomEnvironment(renderer);
+    envTex = pmrem.fromScene(room, 0.04).texture;
+    room.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    pmrem.dispose();
+    return envTex;
+  }
 
   const accentLight = new THREE.PointLight(theme.accent, 14, 18, 2);
   accentLight.position.set(-3, 3.2, 2.5);
@@ -574,22 +767,28 @@ export function createRenderer(opts) {
   scene.fog = new THREE.Fog(new THREE.Color(theme.sky[1]).multiplyScalar(0.55), 20, 48);
 
   const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, fog: false });
-  const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(64, 32), skyMat);
-  skyPlane.position.set(0, 7, -11.5);
+  const skyPlane = new THREE.Mesh(new THREE.PlaneGeometry(64, 24), skyMat);
+  skyPlane.position.set(0, 3, -11.5);
   scene.add(skyPlane);
 
-  const floorMat = new THREE.MeshStandardMaterial({ color: '#2c332e', roughness: 1 });
+  const floorMat = new THREE.MeshStandardMaterial({ color: '#2c332e', roughness: 1, envMapIntensity: 0.15 });
   const floor = new THREE.Mesh(new THREE.CircleGeometry(15, 40), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.y = -3.3;
   floor.receiveShadow = true;
   scene.add(floor);
 
+  // Detailed surfaces: wood grain (colour map tinted by the theme) and felt nap (bump).
+  const woodTex = paintWoodTexture();
+  woodTex.repeat.set(0.11, 0.11);
+  const feltBump = paintNoiseBumpTexture(256, 11, 5200);
+  feltBump.repeat.set(7, 9);
+
   // Table: wood slab with felt-deep border and felt inlay, on a turned base.
   const tableGroup = new THREE.Group();
   scene.add(tableGroup);
   {
-    const woodMat = new THREE.MeshStandardMaterial({ color: theme.table, roughness: 0.7, metalness: 0.05 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: theme.table, roughness: 0.62, metalness: 0.05, envMapIntensity: 0.3 });
     themed.woodMats.push(woodMat);
     const slabGeo = new THREE.ExtrudeGeometry(roundedRectShape(12.6, 15.2, 1.3), { depth: 0.4, bevelEnabled: false, curveSegments: 8 });
     slabGeo.translate(0, 0, -0.2);
@@ -619,7 +818,7 @@ export function createRenderer(opts) {
 
     feltTexDeep = paintFeltTexture(theme.feltDeep);
     feltTexDeep.anisotropy = maxAniso;
-    const deepMat = new THREE.MeshStandardMaterial({ map: feltTexDeep, roughness: 0.95 });
+    const deepMat = new THREE.MeshStandardMaterial({ map: feltTexDeep, roughness: 0.95, envMapIntensity: 0.06 });
     themed.feltDeepMats.push(deepMat);
     const deep = new THREE.Mesh(remapUv(new THREE.ShapeGeometry(roundedRectShape(11.4, 14.0, 1.1), 8), 11.4, 14.0), deepMat);
     deep.rotation.x = -Math.PI / 2;
@@ -629,7 +828,7 @@ export function createRenderer(opts) {
 
     feltTex = paintFeltTexture(theme.felt);
     feltTex.anisotropy = maxAniso;
-    const feltMat = new THREE.MeshStandardMaterial({ map: feltTex, roughness: 0.98 });
+    const feltMat = new THREE.MeshStandardMaterial({ map: feltTex, roughness: 0.98, envMapIntensity: 0.06 });
     themed.feltMats.push(feltMat);
     const felt = new THREE.Mesh(remapUv(new THREE.ShapeGeometry(roundedRectShape(10.7, 13.3, 0.95), 8), 10.7, 13.3), feltMat);
     felt.rotation.x = -Math.PI / 2;
@@ -642,7 +841,7 @@ export function createRenderer(opts) {
   const glasshouse = new THREE.Group();
   scene.add(glasshouse);
   {
-    const ironMat = new THREE.MeshStandardMaterial({ color: '#2a2d2b', roughness: 0.55, metalness: 0.6 });
+    const ironMat = new THREE.MeshStandardMaterial({ color: '#2a2d2b', roughness: 0.4, metalness: 0.7, envMapIntensity: 0.8 });
     const postGeo = new THREE.BoxGeometry(0.16, 8.4, 0.16);
     for (const px of [-8, -4, 0, 4, 8]) {
       const post = new THREE.Mesh(postGeo, ironMat);
@@ -677,12 +876,12 @@ export function createRenderer(opts) {
   const envCore = new THREE.Group();
   const envExtra = new THREE.Group();
   scene.add(envCore, envExtra);
-  const leafMat = new THREE.MeshStandardMaterial({ color: theme.leaf, roughness: 0.9, side: THREE.DoubleSide });
-  const leafMat2 = new THREE.MeshStandardMaterial({ color: shade(theme.leaf, -0.25), roughness: 0.9, side: THREE.DoubleSide });
+  const leafMat = new THREE.MeshStandardMaterial({ color: theme.leaf, roughness: 0.75, side: THREE.DoubleSide, envMapIntensity: 0.25 });
+  const leafMat2 = new THREE.MeshStandardMaterial({ color: shade(theme.leaf, -0.25), roughness: 0.8, side: THREE.DoubleSide, envMapIntensity: 0.25 });
   themed.leafMats.push(leafMat, leafMat2);
-  const potMat = new THREE.MeshStandardMaterial({ color: '#9a5a3a', roughness: 0.85 });
+  const potMat = new THREE.MeshStandardMaterial({ color: '#9a5a3a', roughness: 0.85, envMapIntensity: 0.25 });
   themed.potMats.push(potMat);
-  const soilMat = new THREE.MeshStandardMaterial({ color: '#2e2119', roughness: 1 });
+  const soilMat = new THREE.MeshStandardMaterial({ color: '#2e2119', roughness: 1, envMapIntensity: 0.1 });
 
   // Plants — procedural pots/foliage, consolidated into one InstancedMesh per
   // part type so the whole garden costs ~8 draw calls instead of dozens.
@@ -789,37 +988,41 @@ export function createRenderer(opts) {
     conesA.count = counters.coneA; conesB.count = counters.coneB;
     bladesA.count = counters.bladeA; bladesB.count = counters.bladeB;
     envCore.add(pots, soils, blobsA, blobsB, conesA, conesB);
-    // extra-tier foliage lives in envExtra so setQuality('low') can hide it
+    // extra-tier foliage lives in envExtra so detail 'plain' can hide it
     envExtra.add(bladesA, bladesB);
   }
 
-  // Hanging vines: tube stems + one InstancedMesh for all leaves (1 draw call).
-  const vineLeaves = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.26), leafMat, 40);
-  vineLeaves.count = 0;
-  envExtra.add(vineLeaves);
-  let vineLeafCount = 0;
+  // Hanging vines: a tube stem plus one leaf InstancedMesh per vine, grouped
+  // under a pivot at the roof beam so the whole strand can sway (background).
+  const vineLeafGeo = new THREE.PlaneGeometry(0.16, 0.26);
+  const vines = [];
 
   function makeVine(x, z, len) {
     const g = new THREE.Group();
+    g.position.set(x, 2.7, z);
     const pts = [];
     const n = 6;
     for (let i = 0; i <= n; i++) {
       pts.push(new THREE.Vector3(
-        x + Math.sin(i * 1.7 + x) * 0.22,
-        2.7 - (i / n) * len,
-        z + Math.cos(i * 2.1 + x) * 0.16));
+        Math.sin(i * 1.7 + x) * 0.22,
+        -(i / n) * len,
+        Math.cos(i * 2.1 + x) * 0.16));
     }
     const curve = new THREE.CatmullRomCurve3(pts);
     const stem = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.028, 5), leafMat2);
     g.add(stem);
-    for (let i = 1; i <= 10 && vineLeafCount < 40; i++) {
+    const leaves = new THREE.InstancedMesh(vineLeafGeo, leafMat, 10);
+    for (let i = 1; i <= 10; i++) {
       const p = curve.getPoint(i / 11);
       _e1.set(rng() * 0.9 - 0.45, rng() * Math.PI, rng() * 0.9 - 0.45);
       _q1.setFromEuler(_e1);
       _s1.setScalar(1);
       _m1.compose(p, _q1, _s1);
-      vineLeaves.setMatrixAt(vineLeafCount++, _m1);
+      leaves.setMatrixAt(i - 1, _m1);
     }
+    leaves.instanceMatrix.needsUpdate = true;
+    g.add(leaves);
+    vines.push({ group: g, phase: x * 1.3 });
     return g;
   }
 
@@ -827,9 +1030,27 @@ export function createRenderer(opts) {
     envExtra.add(makeVine(-3.2, -8.4, 2.2));
     envExtra.add(makeVine(2.6, -8.4, 2.6));
     envExtra.add(makeVine(5.4, -8.4, 1.8));
-    vineLeaves.count = vineLeafCount;
-    vineLeaves.instanceMatrix.needsUpdate = true;
   }
+
+  // Window light (detail: detailed): a soft additive decal of roof panes and
+  // leaf dapple lying on the felt, under every card and slot marker, so it
+  // warms the table without touching card contrast. Drifts slowly when the
+  // background is animated.
+  const windowTex = paintWindowLightTexture();
+  windowTex.center.set(0.5, 0.5);
+  windowTex.rotation = 0.32;          // panes fall at the sun's angle
+  windowTex.repeat.set(1.1, 0.9);
+  const windowLightMat = new THREE.MeshBasicMaterial({
+    map: windowTex, color: '#ffd9a0', transparent: true, opacity: 0.12,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  // sized to the felt inlay so the light never spills past the table
+  const windowLight = new THREE.Mesh(new THREE.PlaneGeometry(10.7, 13.3), windowLightMat);
+  windowLight.rotation.x = -Math.PI / 2;
+  windowLight.position.set(0, FELT_Y + 0.003, -0.45);
+  windowLight.renderOrder = -1;
+  scene.add(windowLight);
+  const WINDOW_BASE = { opacity: 0.12 };
 
   // --- Ambient dust motes (pooled Points, bounded drift) ---------------------
   const MOTE_MAX = 200;
@@ -907,8 +1128,29 @@ export function createRenderer(opts) {
   // --- Cards -----------------------------------------------------------------
   const cardBodyGeo = buildCardBodyGeometry();
   const cardFaceGeo = buildCardFaceGeometry();
-  const edgeMat = new THREE.MeshStandardMaterial({ color: '#efe7d2', roughness: 0.85 });
-  const backCapMat = new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.85 });
+  const edgeMat = new THREE.MeshStandardMaterial({ color: '#efe7d2', roughness: 0.85, envMapIntensity: 0.2 });
+  // Card stock: plain = matte paper; detailed = lacquered stock with a light
+  // clearcoat and paper tooth (bump), which catches the key light and the
+  // environment reflections without lowering ink contrast.
+  const paperBump = paintNoiseBumpTexture(256, 5, 2600);
+  function makeFaceMat(id, detailed) {
+    const base = {
+      map: faceTextureOf(id), roughness: 0.8, metalness: 0.0,
+      polygonOffset: true, polygonOffsetFactor: -1, envMapIntensity: 0.14,
+    };
+    if (!detailed) return new THREE.MeshStandardMaterial(base);
+    return new THREE.MeshPhysicalMaterial({
+      ...base, roughness: 0.66, clearcoat: 0.4, clearcoatRoughness: 0.3,
+      bumpMap: paperBump, bumpScale: 0.35,
+    });
+  }
+  function makeBackMat(detailed) {
+    if (!detailed) return new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.85, envMapIntensity: 0.14 });
+    return new THREE.MeshPhysicalMaterial({
+      map: backTex, roughness: 0.55, clearcoat: 0.35, clearcoatRoughness: 0.25, envMapIntensity: 0.14,
+    });
+  }
+  let backCapMat = makeBackMat(q.detail === 'detailed');
   themed.backMats.push(backCapMat);
 
   const cardsRoot = new THREE.Group();
@@ -917,10 +1159,7 @@ export function createRenderer(opts) {
   const locMap = new Map();  // "zone/pile/index" -> card record
 
   function createCard(id) {
-    const faceMat = new THREE.MeshStandardMaterial({
-      map: faceTextureOf(id), roughness: 0.8, metalness: 0.0,
-      polygonOffset: true, polygonOffsetFactor: -1,
-    });
+    const faceMat = makeFaceMat(id, q.detail === 'detailed');
     const group = new THREE.Group();
     const inner = new THREE.Group();
     inner.rotation.x = -Math.PI / 2;
@@ -930,6 +1169,7 @@ export function createRenderer(opts) {
     inner.add(body);
     const face = new THREE.Mesh(cardFaceGeo, faceMat);
     face.position.z = CARD_T / 2 + 0.002;
+    face.receiveShadow = true; // cards above shade the ones they overlap
     inner.add(face);
     cardsRoot.add(group);
     const card = {
@@ -1214,6 +1454,11 @@ export function createRenderer(opts) {
   hintCone.visible = false;
   scene.add(hintCone);
   let hintCurve = null;
+  // With bloom on, the travelling hint arrowhead is pushed into HDR so it glows.
+  function tintHintCone() {
+    hintCone.material.color.set(theme.accent);
+    if (q.bloom === 'on') hintCone.material.color.multiplyScalar(3);
+  }
 
   function locPos(loc) {
     // world position of a {zone,pile,index?} reference, from current layout
@@ -1618,7 +1863,8 @@ export function createRenderer(opts) {
   function frame(nowMs) {
     if (disposed || paused) return;
     const now = nowMs / 1000;
-    const dt = lastFrame < 0 ? 0.016 : Math.min(now - lastFrame, 0.05);
+    const rawMs = lastFrame < 0 ? 16 : Math.min((now - lastFrame) * 1000, 1000);
+    const dt = Math.min(rawMs / 1000, 0.05);
     lastFrame = now;
     simTime += dt;
 
@@ -1637,8 +1883,14 @@ export function createRenderer(opts) {
     updateCamera();
     updateWin();
 
+    updateAmbient();
+    if (adapt(rawMs)) resize(lastCssW, lastCssH);
+    const key = postKey();
+    if (key !== builtPostKey) { builtPostKey = key; buildPost(); }
+
     renderer.info.reset();
-    renderer.render(scene, camera);
+    if (composer) composer.render(dt);
+    else renderer.render(scene, camera);
     statCalls = renderer.info.render.calls;
     statTris = renderer.info.render.triangles;
     rafId = requestAnimationFrame(frame);
@@ -1678,8 +1930,9 @@ export function createRenderer(opts) {
     if (w < 8 || h < 8) { w = window.innerWidth | 0; h = window.innerHeight | 0; }
     w = Math.max(8, w); h = Math.max(8, h);
     lastCssW = w; lastCssH = h;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,
-      quality === 'high' ? 2 : quality === 'medium' ? 1.5 : 1));
+    // pixel ratio = device ratio capped per preset × render scale × adaptive scale
+    pixelRatio = Math.max(0.25, Math.min(window.devicePixelRatio || 1, q.cap) * q.scale * adaptiveScale);
+    renderer.setPixelRatio(pixelRatio);
     // buffer size only — the canvas's display size belongs to the host CSS
     // ("canvas fills its container"); pinning inline px here would freeze it.
     renderer.setSize(w, h, false);
@@ -1687,30 +1940,207 @@ export function createRenderer(opts) {
     refit();
   }
 
-  // --- Quality / theme / motion ---------------------------------------------------
-  function setQuality(q) {
-    if (q !== 'low' && q !== 'medium' && q !== 'high') return;
-    quality = q;
-    const shadows = q === 'high';
-    renderer.shadowMap.enabled = shadows;
-    keyLight.castShadow = shadows;
-    keyLight.shadow.mapSize.set(q === 'high' ? 2048 : 1024, q === 'high' ? 2048 : 1024);
-    if (keyLight.shadow.map) {
-      keyLight.shadow.map.dispose();
-      keyLight.shadow.map = null;
-    }
-    moteGeo.setDrawRange(0, q === 'high' ? 200 : q === 'medium' ? 140 : 60);
-    petalCap = q === 'high' ? 300 : q === 'medium' ? 200 : 120;
-    envExtra.visible = q !== 'low';
-    // shadow toggling requires shader recompilation
+  // --- Graphics settings (gfx.js model) -------------------------------------------
+  let pixelRatio = 1;
+  let adaptiveScale = 1;
+  let frameTimes = [];
+  let frameTimeSum = 0;
+  let fps = 0;
+  let composer = null;
+  let gradePass = null;
+  let builtPostKey = null;
+  let postFailed = false;
+  let gfxJson = null;
+  let detailApplied = null;
+
+  function forEachMaterial(fn) {
     scene.traverse((o) => {
-      if (o.material) {
-        if (Array.isArray(o.material)) o.material.forEach((m) => { m.needsUpdate = true; });
-        else o.material.needsUpdate = true;
-      }
+      if (!o.material) return;
+      if (Array.isArray(o.material)) o.material.forEach(fn);
+      else fn(o.material);
     });
-    // re-apply pixel ratio at the current size
+  }
+
+  function applyDetail(detailed) {
+    if (detailApplied === detailed) return;
+    detailApplied = detailed;
+    for (const card of cards.values()) {
+      const old = card.faceMat;
+      card.faceMat = makeFaceMat(card.id, detailed);
+      card.face.material = card.faceMat;
+      old.dispose();
+    }
+    const oldBack = backCapMat;
+    backCapMat = makeBackMat(detailed);
+    themed.backMats[0] = backCapMat;
+    for (const card of cards.values()) card.body.material = [backCapMat, edgeMat];
+    oldBack.dispose();
+    for (const m of themed.woodMats) { m.map = detailed ? woodTex : null; m.needsUpdate = true; }
+    for (const m of [...themed.feltMats, ...themed.feltDeepMats]) {
+      m.bumpMap = detailed ? feltBump : null;
+      m.bumpScale = 0.6;
+      m.needsUpdate = true;
+    }
+    envExtra.visible = detailed;
+    windowLight.visible = detailed;
+  }
+
+  function applyMotes() {
+    moteGeo.setDrawRange(0, q.particles === 'high' ? MOTE_MAX : 60);
+    petalCap = q.particles === 'high' ? PETAL_MAX : 120;
+  }
+
+  /** Apply saved graphics settings ({ preset, render_scale, adaptive, show_fps, <category> }). */
+  function setGraphics(saved) {
+    const json = JSON.stringify(saved || {});
+    if (json === gfxJson) return;
+    gfxJson = json;
+    gfxSaved = saved || {};
+    const prevShadows = q.shadows;
+    q = resolveGraphics(gfxSaved, detected);
+    canvas.dataset.gfxPreset = q.preset;
+
+    const size = SHADOW_MAP[q.shadows];
+    renderer.shadowMap.enabled = size > 0;
+    keyLight.castShadow = size > 0;
+    if (size > 0 && keyLight.shadow.mapSize.x !== size) {
+      keyLight.shadow.mapSize.set(size, size);
+      if (keyLight.shadow.map) { keyLight.shadow.map.dispose(); keyLight.shadow.map = null; }
+    }
+    // shadow toggling requires shader recompilation
+    if ((prevShadows === 'off') !== (q.shadows === 'off')) forEachMaterial((m) => { m.needsUpdate = true; });
+
+    scene.environment = q.reflections === 'on' ? ensureEnvironment() : null;
+    hemi.intensity = q.reflections === 'on' ? 0.55 : 0.65;
+    applyDetail(q.detail === 'detailed');
+    applyMotes();
+    tintHintCone();
+    adaptiveScale = 1;
+    frameTimes = [];
+    frameTimeSum = 0;
+    builtPostKey = null; // rebuild the post chain on the next frame
+    fpsVisible(q.showFps);
     resize(lastCssW, lastCssH);
+  }
+
+  function graphicsInfo() {
+    const px = [Math.round(lastCssW * pixelRatio), Math.round(lastCssH * pixelRatio)];
+    return {
+      gpu: gpu || '',
+      detected,
+      resolved: q,
+      pixels: px,
+      summary: describe(q, px),
+      fps: Math.round(fps),
+      adaptiveScale: Math.round(adaptiveScale * 100) / 100,
+      postFailed,
+      postActive: !!composer,
+    };
+  }
+
+  let fpsEl = null;
+  function fpsVisible(on) {
+    if (on && !fpsEl) {
+      fpsEl = document.createElement('div');
+      fpsEl.id = 'fps-meter';
+      fpsEl.setAttribute('aria-hidden', 'true');
+      fpsEl.textContent = '… fps';
+      (canvas.parentElement || document.body).append(fpsEl);
+    }
+    if (fpsEl) fpsEl.hidden = !on;
+  }
+
+  // Adaptive resolution: average ~90 frames; step down when slow, back up when fast.
+  function adapt(ms) {
+    frameTimes.push(ms);
+    frameTimeSum += ms;
+    // ~90 frames (or 3 s on very slow devices, so the readout still updates)
+    if (frameTimes.length < 90 && frameTimeSum < 3000) return false;
+    const avg = frameTimeSum / frameTimes.length;
+    frameTimeSum = 0;
+    frameTimes.length = 0;
+    fps = 1000 / avg;
+    if (fpsEl && !fpsEl.hidden) fpsEl.textContent = `${Math.round(fps)} fps · ${Math.round(pixelRatio * 100) / 100}×`;
+    if (!q.adaptive) return false;
+    const before = adaptiveScale;
+    if (avg > 26) adaptiveScale = Math.max(0.6, adaptiveScale - 0.1);
+    else if (avg < 14 && adaptiveScale < 1) adaptiveScale = Math.min(1, adaptiveScale + 0.05);
+    return before !== adaptiveScale;
+  }
+
+  function postKey() {
+    const w = renderer.domElement.width, h = renderer.domElement.height;
+    return q.post ? [q.ao, q.bloom, q.grade, q.antialias, w, h].join('|') : 'none';
+  }
+
+  function buildPost() {
+    if (composer) {
+      for (const p of composer.passes) if (p.dispose) p.dispose();
+      composer.dispose();
+    }
+    composer = null;
+    gradePass = null;
+    if (!q.post) return;
+    const W = renderer.domElement.width, H = renderer.domElement.height; // device pixels
+    try {
+      const target = new THREE.WebGLRenderTarget(W, H, {
+        type: THREE.HalfFloatType, samples: q.antialias === 'msaa' ? 4 : 0,
+      });
+      const c = new EffectComposer(renderer, target);
+      c.setPixelRatio(1);
+      c.setSize(W, H);
+      c.addPass(new RenderPass(scene, camera));
+      if (q.ao !== 'off') {
+        const hi = q.ao === 'high';
+        const ao = new GTAOPass(scene, camera, W, H);
+        ao.output = GTAOPass.OUTPUT.Default;
+        ao.blendIntensity = 0.75;
+        ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.4, thickness: 0.6, scale: 1.0, samples: hi ? 16 : 8 });
+        ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: hi ? 16 : 8 });
+        c.addPass(ao);
+      }
+      if (q.bloom === 'on') {
+        // Linear HDR input: lit ivory card stock sits near 2.0, so the threshold
+        // is set above it — only glints, the win swell and HDR motes bloom.
+        c.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 0.45, 0.5, BLOOM_THRESHOLD));
+      }
+      c.addPass(new OutputPass());
+      if (q.grade === 'on') {
+        gradePass = new ShaderPass(GradeShader);
+        c.addPass(gradePass);
+      }
+      if (q.antialias === 'smaa') c.addPass(new SMAAPass(W, H));
+      if (q.antialias === 'fxaa') {
+        const fxaa = new ShaderPass(FXAAShader);
+        fxaa.material.uniforms.resolution.value.set(1 / W, 1 / H);
+        c.addPass(fxaa);
+      }
+      composer = c;
+      postFailed = false;
+    } catch (e) {
+      // Post-processing is an enhancement: render directly if the chain cannot be built
+      // (the Graphics panel shows a note via graphicsInfo().postFailed).
+      postFailed = true;
+      composer = null;
+    }
+  }
+
+  // Ambient motion: window-light drift and vine sway (background: animated, not reduced motion).
+  function updateAmbient() {
+    const moving = q.background === 'animated' && !reducedMotion;
+    if (windowLight.visible) {
+      // passing clouds and a slow drift of the dapple
+      windowLightMat.opacity = moving
+        ? WINDOW_BASE.opacity * (0.82 + 0.18 * Math.sin(simTime * 0.23) * Math.sin(simTime * 0.071 + 1.3))
+        : WINDOW_BASE.opacity;
+      windowTex.offset.set(moving ? Math.sin(simTime * 0.05) * 0.02 : 0, moving ? Math.sin(simTime * 0.037 + 0.8) * 0.015 : 0);
+    }
+    if (envExtra.visible) {
+      for (const v of vines) {
+        v.group.rotation.z = moving ? Math.sin(simTime * 0.6 + v.phase) * 0.035 : 0;
+        v.group.rotation.x = moving ? Math.sin(simTime * 0.45 + v.phase * 0.7) * 0.025 : 0;
+      }
+    }
   }
 
   function setReducedMotion(b) {
@@ -1765,7 +2195,7 @@ export function createRenderer(opts) {
     hintToMarker.mat.color.set(t.accent);
     stockHintMarker.mat.color.set(t.accent);
     hintLineMat.color.set(t.accent);
-    hintCone.material.color.set(t.accent);
+    tintHintCone();
   }
 
   // --- Lifecycle --------------------------------------------------------------------
@@ -1814,16 +2244,17 @@ export function createRenderer(opts) {
     });
     for (const tex of faceTextures.values()) tex.dispose();
     faceTextures.clear();
+    if (composer) composer.dispose();
+    if (envTex) envTex.dispose();
+    if (fpsEl) fpsEl.remove();
     renderer.dispose();
     if (renderer.forceContextLoss) renderer.forceContextLoss();
   }
 
   // --- Boot --------------------------------------------------------------------------
-  moteGeo.setDrawRange(0, quality === 'high' ? 200 : quality === 'medium' ? 140 : 60);
-  petalCap = quality === 'high' ? 300 : quality === 'medium' ? 200 : 120;
-  envExtra.visible = quality !== 'low';
   motes.visible = !reducedMotion;
-  resize(canvas.clientWidth || 960, canvas.clientHeight || 640);
+  lastCssW = canvas.clientWidth || 960; lastCssH = canvas.clientHeight || 640;
+  setGraphics(gfxSaved);
   rafId = requestAnimationFrame(frame);
 
   return {
@@ -1836,7 +2267,8 @@ export function createRenderer(opts) {
     setHint,
     playEvent,
     setTheme,
-    setQuality,
+    setGraphics,
+    graphicsInfo,
     setReducedMotion,
     resize,
     pause,

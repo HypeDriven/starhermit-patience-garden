@@ -8,6 +8,8 @@ import {
   foundationCount, hiddenCount,
 } from './rules.js';
 import { THEMES, MODES, BAND_LABELS, PRACTICE_LEVELS, CHALLENGES, LESSONS, JOURNEY, ACHIEVEMENTS } from './content.js';
+import { PRESETS, CATEGORIES, presetTier, choosePreset, describe } from './gfx.js';
+import { pickGfxLocale, gfxStrings } from './gfx-i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -530,7 +532,7 @@ export function createUI(handlers) {
     { section: 'Gameplay' },
     { key: 'interfaceMode', label: 'Interface', type: 'select', options: [['3d', '3D glasshouse'], ['2d', '2D cards']], note: '2D is fully playable and works without WebGL.' },
     { key: 'theme', label: 'Theme', type: 'select', options: THEMES.map((t) => [t.id, t.name]) },
-    { key: 'quality', label: 'Graphics quality', type: 'select', options: [['auto', 'Auto'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']] },
+    { graphics: true },
     { section: 'Audio' },
     { key: 'volumes.music', label: 'Music', type: 'range' },
     { key: 'volumes.effects', label: 'Effects', type: 'range' },
@@ -551,6 +553,14 @@ export function createUI(handlers) {
     const host = $('settings-body');
     host.innerHTML = '';
     for (const item of SETTINGS_SCHEMA) {
+      if (item.graphics) {
+        const g = document.createElement('div');
+        g.id = 'gfx-section';
+        g.className = 'gfx-section';
+        host.appendChild(g);
+        if (lastGfx) renderGraphics(...lastGfx);
+        continue;
+      }
       if (item.section) {
         const h = document.createElement('h3');
         h.className = 'settings-section';
@@ -578,6 +588,84 @@ export function createUI(handlers) {
       });
       host.appendChild(row);
     }
+  }
+
+  // ---- graphics section ------------------------------------------------------------
+  // Quality preset, render scale, one override per effect category, adaptive
+  // resolution, frame-rate readout and a "GPU · cost · pixels" summary. Every
+  // change is handed to handlers.onGraphicsChange(newGraphicsObject).
+
+  const gfxLocale = pickGfxLocale(typeof navigator !== 'undefined' ? (navigator.languages || [navigator.language]) : []);
+  const GT = gfxStrings(gfxLocale);
+  let lastGfx = null;
+
+  function gfxSummaryText(info) {
+    const gpu = info.gpu || GT.unknownGpu;
+    return `${gpu} · ${describe(info.resolved, info.pixels, GT.words)}`;
+  }
+
+  function updateGraphicsInfo(info) {
+    const sum = $('gfx-summary');
+    if (!sum) return;
+    sum.textContent = gfxSummaryText(info) + (info.fps ? ` · ${info.fps} fps` : '');
+    const note = $('gfx-note');
+    const msg = info.postFailed ? GT.postFailed : info.noRenderer ? GT.noRenderer : '';
+    note.textContent = msg;
+    note.hidden = !msg;
+  }
+
+  function renderGraphics(saved, info) {
+    lastGfx = [saved, info];
+    const host = $('gfx-section');
+    if (!host) return;
+    const focusId = host.contains(document.activeElement) ? document.activeElement.id : null;
+    const g = { preset: 'auto', render_scale: 1, adaptive: true, show_fps: false, ...(saved || {}) };
+    const r = info.resolved;
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const tierName = (t) => GT.tiers[t] || t;
+    const opt = (v, label, sel) => `<option value="${v}"${sel ? ' selected' : ''}>${esc(label)}</option>`;
+    const presetOpts = [opt('auto', GT.auto.replace('{tier}', GT.presets[info.detected] || info.detected), !PRESETS.includes(g.preset))]
+      .concat(PRESETS.map((p) => opt(p, GT.presets[p], g.preset === p))).join('');
+    const scalePct = Math.round(Math.min(2, Math.max(0.5, Number(g.render_scale) || 1)) * 100);
+    const cats = Object.entries(CATEGORIES).map(([cat, tiers]) => {
+      const own = tiers.includes(g[cat]) ? g[cat] : 'preset';
+      const opts = [opt('preset', GT.fromPreset.replace('{tier}', tierName(presetTier(r.preset, cat))), own === 'preset')]
+        .concat(tiers.map((t) => opt(t, tierName(t), own === t))).join('');
+      return `<div class="setting"><label for="gfx-cat-${cat}">${esc(GT.cats[cat])}</label>
+        <select id="gfx-cat-${cat}" data-gfx-cat="${cat}">${opts}</select></div>`;
+    }).join('');
+    host.innerHTML = `
+      <h3 class="settings-section" id="gfx-heading">${esc(GT.section)}</h3>
+      <p id="gfx-summary" class="gfx-summary" aria-live="polite"></p>
+      <p id="gfx-note" class="gfx-note" hidden></p>
+      <div class="setting"><label for="gfx-preset">${esc(GT.quality)}</label>
+        <select id="gfx-preset" data-gfx="preset">${presetOpts}</select></div>
+      <div class="setting"><label for="gfx-scale">${esc(GT.renderScale)}</label>
+        <span class="gfx-range"><input type="range" id="gfx-scale" data-gfx="render_scale" min="50" max="200" step="10" value="${scalePct}">
+        <output id="gfx-scale-val" for="gfx-scale">${scalePct}%</output></span></div>
+      ${cats}
+      <div class="setting"><label for="gfx-adaptive">${esc(GT.adaptive)}<span class="note">${esc(GT.adaptiveNote)}</span></label>
+        <input type="checkbox" id="gfx-adaptive" data-gfx="adaptive"${g.adaptive !== false ? ' checked' : ''}></div>
+      <div class="setting"><label for="gfx-fps">${esc(GT.showFps)}</label>
+        <input type="checkbox" id="gfx-fps" data-gfx="show_fps"${g.show_fps ? ' checked' : ''}></div>`;
+    updateGraphicsInfo(info);
+
+    const commit = (next) => handlers.onGraphicsChange && handlers.onGraphicsChange(next);
+    host.querySelector('#gfx-preset').addEventListener('change', (e) => commit(choosePreset(g, e.target.value)));
+    const scale = host.querySelector('#gfx-scale');
+    scale.addEventListener('input', () => { host.querySelector('#gfx-scale-val').textContent = `${scale.value}%`; });
+    scale.addEventListener('change', () => commit({ ...g, render_scale: Number(scale.value) / 100 }));
+    for (const sel of host.querySelectorAll('[data-gfx-cat]')) {
+      sel.addEventListener('change', () => {
+        const next = { ...g };
+        if (sel.value === 'preset') delete next[sel.dataset.gfxCat];
+        else next[sel.dataset.gfxCat] = sel.value;
+        commit(next);
+      });
+    }
+    host.querySelector('#gfx-adaptive').addEventListener('change', (e) => commit({ ...g, adaptive: e.target.checked }));
+    host.querySelector('#gfx-fps').addEventListener('change', (e) => commit({ ...g, show_fps: e.target.checked }));
+    if (focusId) { const el = $(focusId); if (el) el.focus({ preventScroll: true }); }
   }
 
   // ---- help ----------------------------------------------------------------------
@@ -694,7 +782,7 @@ export function createUI(handlers) {
     setTitleInfo, setPlayerInfo, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
     renderJourney, renderLessons, updateHUD, setActions,
     buildBoard, renderBoard2D, sizeBoard2D, setBoard2DVisible,
-    renderResults, renderSettings, renderHelp, renderProfile, renderScores,
+    renderResults, renderSettings, renderGraphics, updateGraphicsInfo, renderHelp, renderProfile, renderScores,
     setRailsCollapsed, compatNote,
   };
 }

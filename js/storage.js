@@ -10,7 +10,9 @@ const PREFIX = 'patience-garden/';
 export const DEFAULT_SETTINGS = {
   version: 1,
   theme: 'dawn-glasshouse',
-  quality: 'high',            // low | medium | high | auto
+  // Graphics (see gfx.js): preset auto|low|balanced|high|ultra, render_scale
+  // 0.5–2, adaptive, show_fps, plus optional per-category overrides.
+  graphics: { preset: 'auto', render_scale: 1, adaptive: true, show_fps: false },
   interfaceMode: '3d',        // 3d | 2d
   reducedMotion: false,
   highContrast: false,

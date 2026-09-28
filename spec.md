@@ -143,6 +143,10 @@ During implementation, begin with `threejs-skill-router` and load only the follo
 
 Follow the skill pack's acceptance gate: deterministic seeds, debug views for controlling fields, perceptually grouped parameters, mechanism-backed quality tiers, and a readable no-post baseline. Do not add an effect merely because a skill exists.
 
+### Graphics
+
+The glasshouse table uses ACES filmic tone mapping with sRGB output, a hemisphere sky fill and a warm key sun whose PCF soft-shadow frustum is fitted to the table top; cards cast shadows onto the felt and onto the cards they overlap. Beyond the glass, a painted garden (sky gradient, low sun glow and two hazy tree lines) follows the theme. Optional effects: image-based lighting from a prefiltered room environment (soft reflections on the lacquered cards, iron and wood), GTAO contact darkening, bloom limited to HDR highlights (the hint arrowhead, clearcoat glints and the win light swell; lit card stock stays below the threshold), a colour grade with gentle S-curve, saturation and vignette, FXAA/SMAA/MSAA anti-aliasing, detailed surfaces (clearcoated card faces and backs with paper tooth, wood grain on the table, felt nap, extra ferns and hanging vines, and a soft window-light pattern of roof panes and leaf dapple lying on the felt beneath the cards), particle density (dust motes, win petals) and an animated background (window light drifts, vines sway; still under reduced motion). The Settings panel's **Graphics** section offers a quality preset (Auto, chosen from the detected GPU where software renderers get Low and phones/tablets never exceed Balanced; Low; Balanced; High; Ultra), a render scale (50–200% of the preset's), a per-effect override for shadows, ambient occlusion, bloom, colour grade, anti-aliasing, reflections, surface detail, particles and background ("From preset (…)" by default; choosing a preset clears overrides), adaptive resolution (steps the resolution down to 60% when frames average over 26 ms and back up under 14 ms) and a frame-rate readout in the table's bottom-left corner, plus a summary line "GPU · cost summary · W×H px". Pixel ratio is capped per preset (Low 1, Balanced 1.5, High/Ultra 2) and Low renders without post-processing, as cheaply as the original table. Changes apply immediately, are saved with the other settings (and mirrored to the cloud save when hosted), and `body`/canvas carry `data-gfx-preset`. If the post-processing chain cannot be built the table renders without it and the panel says so. The panel's strings are localized (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) from the browser language. Files: `js/gfx.js` (pure quality model: presets, categories, detection, resolve, describe), `js/gfx-i18n.js` (panel strings), post-processing and environment addons vendored from three.js r160 under `vendor/three/addons/` and mapped by the page's import map.
+
 ### Performance budgets
 
 - Target 60 fps at the default tier and a stable 30 fps fallback on constrained mobile hardware.
@@ -158,7 +162,7 @@ Follow the skill pack's acceptance gate: deterministic seeds, debug views for co
 - `bootstrap`: host handshake, capability detection, asset manifest, lifecycle.
 - `rules`: pure deterministic state transitions, legality, scoring, seeded random stream.
 - `session`: local or hosted commands, snapshots, prediction policy, reconnect, replay.
-- `render`: Three.js scene graph, semantic entity views, camera, lighting, VFX, quality.
+- `render`: Three.js scene graph, semantic entity views, camera, lighting, VFX, post-processing; `gfx` is the pure graphics quality model it and the Settings panel share.
 - `ui`: responsive DOM shell, focus, localization, settings, overlays, accessibility mirror.
 - `audio`: buses, event mapping, focus/background behavior, decode and memory policy.
 - `content`: versioned levels, themes, tutorials, validation metadata.

@@ -17,6 +17,7 @@ import * as store from './storage.js';
 import * as audio from './audio.js';
 import * as platform from './platform.js';
 import { createUI, fmtTime } from './ui.js';
+import { detectPreset, resolve as resolveGraphics, DEFAULT_GRAPHICS } from './gfx.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -108,6 +109,7 @@ const ui = createUI({
   onLeave: () => leaveGame(),
   onResultsAction: (action) => resultsAction(action),
   onSettingsChange: (key, value) => applySetting(key, value),
+  onGraphicsChange: (g) => applyGraphics(g),
 });
 
 // ---------------------------------------------------------------------------
@@ -139,11 +141,12 @@ function applySettings() {
   document.body.classList.toggle('large-text', settings.largeText);
   document.body.classList.remove('cb-deuteranopia', 'cb-protanopia', 'cb-tritanopia');
   if (settings.colorblindPalette !== 'default') document.body.classList.add(`cb-${settings.colorblindPalette}`);
+  document.body.dataset.gfxPreset = resolveGraphics(graphicsSettings(), gpuInfo().detected).preset;
   audio.setVolumes(settings.volumes);
   audio.setMuted(settings.muted);
   if (renderer) {
     renderer.setTheme(theme);
-    renderer.setQuality(resolvedQuality());
+    renderer.setGraphics(graphicsSettings());
     renderer.setReducedMotion(settings.reducedMotion);
   }
   if (session && ui.currentScreen() === 'game') {
@@ -155,11 +158,57 @@ function applySettings() {
   }
 }
 
-function resolvedQuality() {
-  if (settings.quality !== 'auto') return settings.quality;
-  const mobile = matchMedia('(pointer: coarse)').matches;
-  return mobile ? 'medium' : 'high';
+// ---------------------------------------------------------------------------
+// Graphics (quality model in gfx.js; applied live by render3d.setGraphics)
+// ---------------------------------------------------------------------------
+
+let gpuProbe = null;
+/** GPU name + Auto preset, probed once from a throwaway WebGL context. */
+function gpuInfo() {
+  if (gpuProbe) return gpuProbe;
+  let name = '';
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (gl) {
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER) || '');
+      const lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();
+    }
+  } catch { /* no WebGL: the 2D table is used */ }
+  const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  gpuProbe = { gpu: name, detected: detectPreset(name, { mobile }) };
+  return gpuProbe;
 }
+
+function graphicsSettings() {
+  if (!settings.graphics || typeof settings.graphics !== 'object') settings.graphics = { ...DEFAULT_GRAPHICS };
+  return settings.graphics;
+}
+
+function graphicsInfo() {
+  if (renderer) return renderer.graphicsInfo();
+  const { gpu, detected } = gpuInfo();
+  const resolved = resolveGraphics(graphicsSettings(), detected);
+  const r = ui.els.boardRegion.getBoundingClientRect();
+  const w = r.width > 8 ? r.width : window.innerWidth, h = r.height > 8 ? r.height : window.innerHeight;
+  const ratio = Math.min(window.devicePixelRatio || 1, resolved.cap) * resolved.scale;
+  return { gpu, detected, resolved, pixels: [Math.round(w * ratio), Math.round(h * ratio)], postFailed: false, noRenderer: true, fps: 0 };
+}
+
+function applyGraphics(g) {
+  settings.graphics = g;
+  store.saveSettings(settings);
+  applySettings();
+  mirrorCloud();
+  ui.renderGraphics(settings.graphics, graphicsInfo());
+  track('settings-change', { key: 'graphics' });
+}
+
+// Live summary (fps, adaptive pixels) while the Settings overlay is open.
+setInterval(() => {
+  if (!document.getElementById('screen-settings').hidden) ui.updateGraphicsInfo(graphicsInfo());
+}, 1000);
 
 function boardIs2D() {
   return settings.interfaceMode === '2d' || rendererFailed;
@@ -176,7 +225,8 @@ async function ensureRenderer() {
     renderer = createRenderer({
       canvas: ui.els.canvas,
       theme: themeById(settings.theme),
-      quality: resolvedQuality(),
+      graphics: graphicsSettings(),
+      detected: gpuInfo().detected,
       reducedMotion: settings.reducedMotion,
       seed: session ? session.state.seed : 1,
     });
@@ -1218,6 +1268,7 @@ function loadGlobalBoards() {
 function init() {
   bootPlatform();
   audio.initAudio(2024);
+  ui.renderGraphics(graphicsSettings(), graphicsInfo());
   ui.renderSettings(settings);
   ui.renderHelp();
   applySettings();

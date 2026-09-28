@@ -70,6 +70,7 @@ button { font: inherit; }
 .glass-panel.tall { max-height: min(760px, 92vh); display: flex; flex-direction: column; }
 .glass-panel.scrollable > .settings-grid, .glass-panel.tall > div { overflow-y: auto; }
 #help-body, #profile-body, #scores-body { overflow-y: auto; }
+.glass-panel.tall > .row-end { flex-shrink: 0; overflow: visible; }
 
 .title-card { text-align: center; }
 .kicker { text-transform: uppercase; letter-spacing: 0.22em; font-size: 0.75rem; color: var(--accent-2); margin: 0 0 4px; }
@@ -334,4 +335,25 @@ body.high-contrast .pcard { border: 2px solid #000; }
 @media (prefers-reduced-motion: reduce) {
   .btn, .pcard, #toast, .rail { transition: none !important; }
   .pcard.hinted { animation: none; box-shadow: 0 0 0 4px var(--accent); }
+}
+
+/* ------------------------- graphics settings ------------------------------ */
+
+.gfx-section { display: grid; grid-template-columns: 1fr; }
+.gfx-summary { margin: 2px 0 4px; font-size: 0.78rem; color: var(--text-dim); overflow-wrap: anywhere; }
+.gfx-note { margin: 0 0 4px; font-size: 0.8rem; color: var(--accent); }
+.gfx-range { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.gfx-range output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.gfx-section .setting select { max-width: 56%; }
+#fps-meter {
+  position: absolute; left: 8px; bottom: 8px; z-index: 5; pointer-events: none;
+  padding: 2px 8px; border-radius: 6px; font: 600 0.72rem/1.5 ui-monospace, monospace;
+  background: rgba(0, 0, 0, 0.55); color: #f3ecd8;
+}
+@media (max-width: 480px) {
+  .gfx-range input[type="range"] { width: 110px; }
+}
+@media (max-height: 480px) {
+  .glass-panel.tall { padding: 14px 20px; }
+  .glass-panel.tall h2 { margin: 0 0 6px; }
 }

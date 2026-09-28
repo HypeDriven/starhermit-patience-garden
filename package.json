@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/rules.test.mjs",
-    "test:e2e": "node tests/e2e.mjs"
+    "test": "node --test tests/rules.test.mjs tests/gfx.test.mjs",
+    "test:e2e": "node tests/e2e.mjs && node tests/e2e-graphics.mjs"
   },
   "devDependencies": {
     "playwright-core": "^1.62.1"

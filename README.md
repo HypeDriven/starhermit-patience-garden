@@ -22,7 +22,8 @@ python3 -m http.server 8080
 - `js/solver.js` — constructive winnable-deal generation + solvability/difficulty metrics
 - `js/content.js`, `js/content-seeds.js` — themes, 40-stage journey, challenges, lessons, daily
 - `js/session.js` — round controller (commands, clock, constraints, replay envelope)
-- `js/render3d.js` + `vendor/three.module.js` — Three.js glasshouse scene
+- `js/render3d.js` + `vendor/three.module.js` (+ `vendor/three/addons/`, r160) — Three.js glasshouse scene, post-processing
+- `js/gfx.js`, `js/gfx-i18n.js` — graphics quality presets/overrides model and Graphics panel strings
 - `js/ui.js`, `js/main.js` — DOM UI (fully playable 2D layer), input, state machine
 - `js/audio.js`, `js/storage.js` — procedural WebAudio, local persistence
 - `server.js` — authoritative validation script (daily seeds, replay checks)
