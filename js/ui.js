@@ -138,6 +138,21 @@ export function createUI(handlers) {
     $('sync-status').textContent = syncLabel ? `· ${syncLabel}` : '';
   }
 
+  // StarHermit account buttons on the title card (sign-in only on the hosted
+  // domain without a token; invite only when signed in).
+  function setAccountButtons({ signIn, invite }) {
+    $('btn-signin').hidden = !signIn;
+    $('btn-invite').hidden = !invite;
+  }
+  function setAccountLabels({ signIn, invite }) {
+    $('btn-signin').textContent = signIn;
+    $('btn-invite').textContent = invite;
+  }
+  function onAccountAction({ signIn, invite }) {
+    wire('btn-signin', signIn);
+    wire('btn-invite', invite);
+  }
+
   function renderModes() {
     const host = $('mode-list');
     host.innerHTML = '';
@@ -670,16 +685,26 @@ export function createUI(handlers) {
 
   // ---- help ----------------------------------------------------------------------
 
-  function renderHelp() {
+  function keyLabel(code) {
+    const named = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc', Space: 'Space', NumpadEnter: 'Num Enter' };
+    if (named[code]) return named[code];
+    if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+    if (/^Digit\d$/.test(code)) return code.slice(5);
+    return String(code).replace(/[^\w ]/g, '');
+  }
+  const kbds = (codes) => (codes || []).map((c) => `<kbd>${keyLabel(c)}</kbd>`).join('/');
+
+  function renderHelp(b = {}) {
+    const k = (action, fallback) => (b[action] && b[action].length ? kbds(b[action]) : fallback);
     $('help-body').innerHTML = `
       <p>Build four <b>foundations</b> from Ace to King, one suit each. On the <b>tableau</b>, build <b>down</b> in <b>alternating colours</b>. Uncover every hidden card.</p>
-      <div class="rule-card"><div class="demo">🂿</div><div><h4>Stock &amp; waste</h4><p>Activate the stock (<kbd>D</kbd> or tap) to draw. When it runs out, tap again to recycle the waste — recycling costs points.</p></div></div>
+      <div class="rule-card"><div class="demo">🂿</div><div><h4>Stock &amp; waste</h4><p>Activate the stock (${k('draw', '<kbd>D</kbd>')} or tap) to draw. When it runs out, tap again to recycle the waste — recycling costs points.</p></div></div>
       <div class="rule-card"><div class="demo"><span style="color:#b03a2e">8♥</span>→<span>9♠</span></div><div><h4>Alternating runs</h4><p>Place a card on a tableau card one rank higher and of the opposite colour. Face-up runs move together.</p></div></div>
       <div class="rule-card"><div class="demo">K♣</div><div><h4>Empty rows</h4><p>Only a King may move to an empty tableau row.</p></div></div>
       <div class="rule-card"><div class="demo">A♥→❀</div><div><h4>Foundations</h4><p>Bank Aces first, then upward by suit. Double-tap a card to send it to its foundation. Banking early is usually safe.</p></div></div>
-      <div class="rule-card"><div class="demo">❀</div><div><h4>Auto-finish</h4><p>When nothing is hidden and the stock is empty, Auto-finish (<kbd>A</kbd>) banks everything for you.</p></div></div>
+      <div class="rule-card"><div class="demo">❀</div><div><h4>Auto-finish</h4><p>When nothing is hidden and the stock is empty, Auto-finish (${k('autofinish', '<kbd>A</kbd>')}) banks everything for you.</p></div></div>
       <h3>Controls</h3>
-      <div class="rule-card"><div class="demo">⌨</div><div><h4>Keyboard</h4><p>Arrows move focus between piles · <kbd>Enter</kbd>/<kbd>Space</kbd> select or place · <kbd>D</kbd> draw · <kbd>U</kbd> undo · <kbd>H</kbd> hint · <kbd>A</kbd> auto-finish · <kbd>Esc</kbd> pause.</p></div></div>
+      <div class="rule-card"><div class="demo">⌨</div><div><h4>Keyboard</h4><p>${k('focus_left', '←')} ${k('focus_right', '→')} ${k('focus_up', '↑')} ${k('focus_down', '↓')} move focus between piles · ${k('select', '<kbd>Enter</kbd>')} select or place · ${k('draw', '<kbd>D</kbd>')} draw · ${k('undo', '<kbd>U</kbd>')} undo · ${k('hint', '<kbd>H</kbd>')} hint · ${k('autofinish', '<kbd>A</kbd>')} auto-finish · ${k('pause', '<kbd>Esc</kbd>')} pause.</p></div></div>
       <div class="rule-card"><div class="demo">🎮</div><div><h4>Gamepad</h4><p>D-pad or left stick moves focus · A selects or places · B cancels or pauses · X undo · Y hint · Start pauses.</p></div></div>
       <div class="rule-card"><div class="demo">👆</div><div><h4>Pointer &amp; touch</h4><p>Tap a card to select, tap a target to place — or drag runs directly. Double-tap banks to a foundation. Tap the stock to draw.</p></div></div>
       <div class="rule-card"><div class="demo">✦</div><div><h4>Assists</h4><p>Undo and Hint are always available in Practice and Journey. Assisted runs are flagged on the board.</p></div></div>`;
@@ -779,7 +804,7 @@ export function createUI(handlers) {
 
   return {
     els, showScreen, currentScreen, openOverlay, closeOverlay, toast, hideToast, announce, coach,
-    setTitleInfo, setPlayerInfo, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
+    setTitleInfo, setPlayerInfo, setAccountButtons, setAccountLabels, onAccountAction, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
     renderJourney, renderLessons, updateHUD, setActions,
     buildBoard, renderBoard2D, sizeBoard2D, setBoard2DVisible,
     renderResults, renderSettings, renderGraphics, updateGraphicsInfo, renderHelp, renderProfile, renderScores,

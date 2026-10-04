@@ -105,6 +105,7 @@ button { font: inherit; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
 .btn.ghost:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 20%, transparent); }
 .btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn[hidden] { display: none; }
 .btn.icon { padding: 6px 12px; font-size: 1rem; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 

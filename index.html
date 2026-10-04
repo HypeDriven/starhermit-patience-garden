@@ -9,6 +9,8 @@
 <title>Patience Garden</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="browser-guard.js"></script>
+<script src="starhermit-sdk.js"></script>
+<script>StarHermit.init();</script>
 </head>
 <body>
 <a class="skip-link" href="#board-region">Skip to the card table</a>
@@ -31,6 +33,8 @@
         <button id="btn-profile" class="btn ghost">Profile</button>
         <button id="btn-help" class="btn ghost">How to Play</button>
         <button id="btn-settings" class="btn ghost">Settings</button>
+        <button id="btn-invite" class="btn ghost" hidden>Invite a friend</button>
+        <button id="btn-signin" class="btn ghost" hidden>Sign in with StarHermit</button>
       </div>
       <p class="player-line" id="player-line" hidden>❀ <b id="player-name"></b> <span class="dim" id="sync-status"></span></p>
       <p class="build-note" id="build-note"></p>

@@ -16,6 +16,7 @@ import {
 import * as store from './storage.js';
 import * as audio from './audio.js';
 import * as platform from './platform.js';
+import { currentPlatformStrings } from './platform-i18n.js';
 import { createUI, fmtTime } from './ui.js';
 import { detectPreset, resolve as resolveGraphics, DEFAULT_GRAPHICS } from './gfx.js';
 
@@ -1026,9 +1027,37 @@ function kbAnnounce() {
   if (renderer) renderer.setLegalTargets(selection ? legalTargetsForSelection() : [t]);
 }
 
+// Keyboard bindings: declared as control.* in starhermit.txt; the player's
+// StarHermit overrides replace these defaults when signed in.
+const DEFAULT_BINDINGS = {
+  focus_left: ['ArrowLeft'],
+  focus_right: ['ArrowRight'],
+  focus_up: ['ArrowUp'],
+  focus_down: ['ArrowDown'],
+  select: ['Enter', 'NumpadEnter', 'Space'],
+  draw: ['KeyD'],
+  undo: ['KeyU'],
+  hint: ['KeyH'],
+  autofinish: ['KeyA'],
+  pause: ['Escape'],
+};
+let bindings = structuredClone(DEFAULT_BINDINGS);
+const KB_DIR = { focus_left: 'arrowleft', focus_right: 'arrowright', focus_up: 'arrowup', focus_down: 'arrowdown' };
+
+function actionFor(code) {
+  for (const [action, codes] of Object.entries(bindings)) if (codes.includes(code)) return action;
+  return null;
+}
+
+function applyBindings(b) {
+  bindings = b;
+  ui.renderHelp(bindings);
+}
+
 document.addEventListener('keydown', (e) => {
+  const action = actionFor(e.code);
   // global overlay handling
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' || action === 'pause') {
     for (const ov of ['settings', 'help', 'profile', 'scores']) {
       if (!document.getElementById(`screen-${ov}`).hidden) { ui.closeOverlay(ov); return; }
     }
@@ -1038,21 +1067,20 @@ document.addEventListener('keydown', (e) => {
   }
   if (!session || ui.currentScreen() !== 'game') return;
   if (!boardIs2D() || !document.activeElement?.closest?.('#board-dom')) {
-    const k = e.key.toLowerCase();
-    if (k === 'arrowleft' || k === 'arrowright' || k === 'arrowup' || k === 'arrowdown') {
+    if (KB_DIR[action]) {
       e.preventDefault();
-      kbMove(k);
+      kbMove(KB_DIR[action]);
       return;
     }
-    if (k === 'enter' || k === ' ') {
+    if (action === 'select') {
       e.preventDefault();
       kbConfirm();
       return;
     }
-    if (k === 'd') { e.preventDefault(); tryDispatch({ type: 'draw' }); return; }
-    if (k === 'u') { e.preventDefault(); doUndo(); return; }
-    if (k === 'h') { e.preventDefault(); doHint(); return; }
-    if (k === 'a') { e.preventDefault(); if (session.canAutoFinish()) tryDispatch({ type: 'autofinish' }); return; }
+    if (action === 'draw') { e.preventDefault(); tryDispatch({ type: 'draw' }); return; }
+    if (action === 'undo') { e.preventDefault(); doUndo(); return; }
+    if (action === 'hint') { e.preventDefault(); doHint(); return; }
+    if (action === 'autofinish') { e.preventDefault(); if (session.canAutoFinish()) tryDispatch({ type: 'autofinish' }); return; }
   }
 });
 
@@ -1198,11 +1226,13 @@ function currentSaveDoc() {
 /** Debounced PUT of the save documents to the cloud slot (localStorage stays the cache). */
 function mirrorCloud() {
   platform.queueCloudSave(currentSaveDoc());
+  platform.syncSettings(settings);
 }
 
 function updatePlayerLine() {
   const name = platform.nickname();
   ui.setPlayerInfo(name, name ? (SYNC_LABELS[platform.syncStatus()] || '') : null);
+  ui.setAccountButtons({ signIn: platform.canSignIn(), invite: !!platform.inviteLink() });
 }
 
 /** Remote-preferred load: adopt the cloud doc, preserving the replaced local one. */
@@ -1225,12 +1255,52 @@ function applyRemoteDoc(doc) {
   if (session) updateHUDFull();
 }
 
+/** Platform settings KV wins over local values for known preference keys. */
+function applyRemoteSettings(remote) {
+  let changed = false;
+  for (const [k, v] of Object.entries(remote || {})) {
+    if (k === 'version' || !(k in store.DEFAULT_SETTINGS) || v == null) continue;
+    if (typeof v !== typeof store.DEFAULT_SETTINGS[k]) continue;
+    if (JSON.stringify(settings[k]) === JSON.stringify(v)) continue;
+    settings[k] = structuredClone(v);
+    changed = true;
+  }
+  if (!changed) return;
+  store.saveSettings(settings);
+  ui.renderSettings(settings);
+  ui.renderGraphics(graphicsSettings(), graphicsInfo());
+  applySettings();
+}
+
+async function inviteFriend() {
+  const t = currentPlatformStrings();
+  const link = platform.inviteLink();
+  if (!link) return;
+  try {
+    await navigator.clipboard.writeText(link);
+    ui.toast(t.inviteCopied);
+  } catch {
+    ui.toast(t.inviteFailed.replace('{link}', link));
+  }
+}
+
 function bootPlatform() {
+  const t = currentPlatformStrings();
+  ui.setAccountLabels({ signIn: t.signIn, invite: t.invite });
+  ui.onAccountAction({ signIn: () => platform.signIn(), invite: () => inviteFriend() });
   const boot = platform.initPlatform();
+  platform.loadBindings(DEFAULT_BINDINGS).then(applyBindings);
+  platform.onAuthChange(({ signedIn }) => {
+    if (!signedIn) ui.toast(t.signedOut);
+    updatePlayerLine();
+  });
+  updatePlayerLine();
   if (!boot.hosted) return;
   platform.onSyncStatus(updatePlayerLine);
-  boot.ready.then((remoteDoc) => {
+  boot.ready.then(async (remoteDoc) => {
     if (remoteDoc) applyRemoteDoc(remoteDoc);
+    applyRemoteSettings(await platform.loadRemoteSettings());
+    platform.syncSettings(settings);
     updatePlayerLine();
   });
 }
@@ -1254,11 +1324,7 @@ function submitRankedReplay() {
 // Read-only global board for the scores overlay; local records always shown.
 function loadGlobalBoards() {
   if (!platform.isHosted()) return Promise.resolve(null);
-  return platform.leaderboardInfo().then(async (info) => {
-    if (!info) return null;
-    const rows = await platform.leaderboardEntries(info.id).catch(() => null);
-    return rows ? [{ title: 'Global', rows }] : null;
-  });
+  return platform.globalBoardRows().then((rows) => (rows ? [{ title: 'Global', rows }] : null), () => null);
 }
 
 // ---------------------------------------------------------------------------
@@ -1270,7 +1336,7 @@ function init() {
   audio.initAudio(2024);
   ui.renderGraphics(graphicsSettings(), graphicsInfo());
   ui.renderSettings(settings);
-  ui.renderHelp();
+  ui.renderHelp(bindings);
   applySettings();
   refreshScreens();
   ui.showScreen('title');
