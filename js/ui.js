@@ -414,7 +414,9 @@ export function createUI(handlers) {
 
   function sizeBoard2D() {
     const r = els.boardRegion.getBoundingClientRect();
-    const w = Math.min((r.width - 24 - 6 * 8) / 7, (r.height - 60) / 5.2, 96);
+    // the 96px cap grows with the large-screen UI scale (1 at ≤1600×1000)
+    const cap = 96 * ((window.UIScale && window.UIScale.value) || 1);
+    const w = Math.min((r.width - 24 - 6 * 8) / 7, (r.height - 60) / 5.2, cap);
     els.boardDom.style.setProperty('--card-w', `${Math.max(38, Math.floor(w))}px`);
   }
 

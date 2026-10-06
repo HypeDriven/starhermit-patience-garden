@@ -67,14 +67,14 @@ button { font: inherit; }
   max-height: 100%;
 }
 .glass-panel.wide { max-width: 860px; }
-.glass-panel.tall { max-height: min(760px, 92vh); display: flex; flex-direction: column; }
+.glass-panel.tall { max-height: min(760px, calc(92vh / var(--ui-scale, 1))); display: flex; flex-direction: column; }
 .glass-panel.scrollable > .settings-grid, .glass-panel.tall > div { overflow-y: auto; }
 #help-body, #profile-body, #scores-body { overflow-y: auto; }
 .glass-panel.tall > .row-end { flex-shrink: 0; overflow: visible; }
 
 .title-card { text-align: center; }
 .kicker { text-transform: uppercase; letter-spacing: 0.22em; font-size: 0.75rem; color: var(--accent-2); margin: 0 0 4px; }
-.title-card h1 { font-size: clamp(2.4rem, 7vw, 3.6rem); margin: 0 0 6px; }
+.title-card h1 { font-size: clamp(2.4rem, calc(7vw / var(--ui-scale, 1)), 3.6rem); margin: 0 0 6px; }
 .tagline { color: var(--text-dim); margin: 0 0 22px; max-width: 42ch; margin-inline: auto; }
 .title-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0 10px; }
 .title-grid .btn { display: flex; flex-direction: column; gap: 2px; align-items: center; padding: 12px 8px; }
@@ -292,7 +292,7 @@ body.cb-tritanopia .pcard.red { color: #a00050; }
   position: fixed; left: 50%; bottom: calc(76px + var(--sab)); transform: translateX(-50%) translateY(20px);
   background: var(--panel); border: 1px solid var(--accent); color: var(--text);
   padding: 10px 20px; border-radius: 24px; z-index: 90; opacity: 0; pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease; max-width: min(90vw, 480px); text-align: center;
+  transition: opacity 0.25s ease, transform 0.25s ease; max-width: min(calc(90vw / var(--ui-scale, 1)), 480px); text-align: center;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 #toast.error { border-color: var(--danger); }
@@ -303,7 +303,7 @@ body.cb-tritanopia .pcard.red { color: #a00050; }
 
 @media (max-width: 1023px) {
   .screen.game { grid-template-columns: 1fr; grid-template-areas: "top" "board" "tray"; }
-  .rail { position: fixed; top: calc(54px + var(--sat)); bottom: calc(64px + var(--sab)); width: min(300px, 84vw); background: color-mix(in srgb, var(--panel) 96%, transparent); z-index: 30; box-shadow: 0 10px 40px rgba(0,0,0,0.5); transition: transform 0.25s ease; }
+  .rail { position: fixed; top: calc(54px + var(--sat)); bottom: calc(64px + var(--sab)); width: min(300px, calc(84vw / var(--ui-scale, 1))); background: color-mix(in srgb, var(--panel) 96%, transparent); z-index: 30; box-shadow: 0 10px 40px rgba(0,0,0,0.5); transition: transform 0.25s ease; }
   #rail-left { left: 0; border-right: 1px solid color-mix(in srgb, var(--text) 15%, transparent); }
   #rail-right { right: 0; left: auto; border-left: 1px solid color-mix(in srgb, var(--text) 15%, transparent); }
   .rail.collapsed#rail-left { transform: translateX(-105%); }
@@ -313,6 +313,8 @@ body.cb-tritanopia .pcard.red { color: #a00050; }
 @media (orientation: portrait) and (max-width: 700px) {
   #hud-stats { gap: 10px; font-size: 0.85rem; }
   #tray-bottom { flex-wrap: wrap; }
+  /* the tray wraps to two rows here: keep toasts (hints) clear of it */
+  #toast { bottom: calc(128px + var(--sab)); }
   #tray-bottom .btn { flex: 1 1 40%; padding: 9px 6px; font-size: 0.9rem; }
   .glass-panel { padding: 20px; }
 }
@@ -358,3 +360,11 @@ body.high-contrast .pcard { border: 2px solid #000; }
   .glass-panel.tall { padding: 14px 20px; }
   .glass-panel.tall h2 { margin: 0 0 6px; }
 }
+
+/* --------------------------- large screens -------------------------------- */
+/* ui-scale.js sets --ui-scale (1 up to 1600x1000, then grows). Menu screens,
+   overlays and the game chrome are zoomed once each; the 3D canvas and the 2D
+   DOM board (sized in JS from the board region) stay unzoomed. */
+.screen:not(.game), #hud-top, .rail, #tray-bottom, .coach, #toast, #compat-note,
+#fps-meter, .skip-link { zoom: var(--ui-scale, 1); }
+html.ui-scaled .screen.game { grid-template-columns: calc(230px * var(--ui-scale)) 1fr calc(230px * var(--ui-scale)); }
