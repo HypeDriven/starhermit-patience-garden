@@ -1223,8 +1223,15 @@ function currentSaveDoc() {
   };
 }
 
+// Signed in, nothing is mirrored until the cloud doc has been compared: a
+// save queued earlier would PUT the stale local docs over a newer cloud save
+// (debounce or pagehide flush). Such a save is replayed after the load.
+let cloudReady = true;
+let cloudMirrorHeld = false;
+
 /** Debounced PUT of the save documents to the cloud slot (localStorage stays the cache). */
 function mirrorCloud() {
+  if (!cloudReady) { cloudMirrorHeld = true; return; }
   platform.queueCloudSave(currentSaveDoc());
   platform.syncSettings(settings);
 }
@@ -1297,8 +1304,11 @@ function bootPlatform() {
   updatePlayerLine();
   if (!boot.hosted) return;
   platform.onSyncStatus(updatePlayerLine);
-  boot.ready.then(async (remoteDoc) => {
+  cloudReady = false;
+  boot.ready.catch(() => null).then(async (remoteDoc) => {
+    cloudReady = true;
     if (remoteDoc) applyRemoteDoc(remoteDoc);
+    if (cloudMirrorHeld) { cloudMirrorHeld = false; mirrorCloud(); } // pushes the docs as they stand after adoption
     applyRemoteSettings(await platform.loadRemoteSettings());
     platform.syncSettings(settings);
     updatePlayerLine();
