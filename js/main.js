@@ -917,6 +917,22 @@ function finishRound() {
     nextLabel: nextLabel || (session.mode !== 'journey' ? 'New deal' : null),
   });
   submitRankedReplay();
+  postToLeaderboard(won, b.total);
+}
+
+// Signed in, every won round (any mode but lessons) posts its total to the
+// StarHermit high-score board; the results screen shows the rank.
+function postToLeaderboard(won, total) {
+  const line = $('results-lb');
+  if (!line) return;
+  if (!won || !platform.isHosted()) { line.hidden = true; return; }
+  const t = currentPlatformStrings();
+  line.hidden = false;
+  line.textContent = t.lbPosting;
+  platform.submitScore(total).then((r) => {
+    line.textContent = !r.posted ? t.lbNotPosted
+      : r.rank ? t.lbRank.replace('{rank}', r.rank) : t.lbPosted;
+  });
 }
 
 function resultsAction(action) {

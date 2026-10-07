@@ -167,7 +167,7 @@ The glasshouse table uses ACES filmic tone mapping with sRGB output, a hemispher
 - `ui`: responsive DOM shell, focus, localization, settings, overlays, accessibility mirror.
 - `audio`: buses, event mapping, focus/background behavior, decode and memory policy.
 - `content`: versioned levels, themes, tutorials, validation metadata.
-- `platform`: adapter over the shared StarHermit SDK (launch token and renewal, sign-in, profile, cloud save, settings KV, bindings, invite link, replay validation, read-only boards).
+- `platform`: adapter over the shared StarHermit SDK (launch token and renewal, sign-in, profile, cloud save, settings KV, bindings, invite link, replay validation, score submit and board reads).
 
 No module may mutate rules state except through a validated command. Rendering consumes immutable snapshots plus interpolation data. UI state and simulation state are separate so closing a drawer cannot affect a match.
 
@@ -189,7 +189,7 @@ No module may mutate rules state except through a validated command. Rendering c
 ## 6. StarHermit integration
 
 ### Packaging and launch
-- The browser distribution has `starhermit.txt` at its root (`name=Patience Garden`, `launch=index.html`, `server=server.js`, and `control.*` lines). `index.html` loads the shared SDK `starhermit-sdk.js` (an unchanged copy of `tools/starhermit-sdk.js`) and calls `StarHermit.init()` before the game modules; `js/platform.js` is the game's adapter over `window.StarHermit`.
+- The browser distribution has `starhermit.txt` at its root (`name=Patience Garden`, `launch=index.html`, `server=score-script.js`, and `control.*` lines). `score-script.js` is the platform script: it range-checks a won round's total sent through `StarHermit.submitScores` and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`); `server.js` is the local dev server. `index.html` loads the shared SDK `starhermit-sdk.js` (an unchanged copy of `tools/starhermit-sdk.js`) and calls `StarHermit.init()` before the game modules; `js/platform.js` is the game's adapter over `window.StarHermit`.
 - The SDK reads `#game_token=` (library launch) or `#access_token=` (direct sign-in return), strips it from the URL, takes the slug from the token's `game_scope` claim, and renews the token via `POST /api/v1/games/{slug}/launch-token`. Tokens are never persisted. When renewal is refused the game toasts that it is signed out, hides the account line and keeps playing locally.
 - Without a token the game makes no network requests. On `<id>.starhermit.com` without a token the title card shows **Sign in with StarHermit**, which redirects through the platform sign-in and returns signed in.
 - Hosted, the clock syncs with `GET /api/v1/time` (round-trip adjusted) for the daily countdown.
@@ -202,10 +202,11 @@ No module may mutate rules state except through a validated command. Rendering c
 - **Invite a friend** (title card, signed in only) copies `StarHermit.inviteLink()` to the clipboard with a confirmation toast. Account strings are localized in all nine locales (`js/platform-i18n.js`).
 
 ### Leaderboards, achievements, social
-- Daily and Score Chase results send their replay envelope to the game script's `POST /api/v1/validate`; the results screen notes whether the run validated. Unreachable validation leaves the result local (casual board).
-- The Score Chase overlay shows the local board plus, when hosted and a platform board exists, the first platform leaderboard read-only with nicknames. The client never submits scores or achievement unlocks.
+- Daily and Score Chase results send their replay envelope to `POST /api/v1/validate` (a route of the local `server.js`; the platform script has none, so hosted runs end up unvalidated); the results screen notes whether the run validated. Unreachable validation leaves the result local (casual board).
+- **Leaderboard:** signed in, every won round in any mode except lessons posts its total score through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board: integer, higher is better, 0–1,000,000), and the results screen shows "Leaderboard rank: #N" (or posted / not posted; localized with the account strings). Lost rounds and standalone play post nothing and show no line.
+- The Score Chase overlay shows the local board plus, when hosted, the first platform leaderboard (`high-score`) with nicknames. The client submits no achievement unlocks.
 - Achievements are tracked locally (Profile overlay); `server.js` declares no platform achievements, so no platform achievement screen exists.
-- No matchmaking, session chat, friends picker, replays, realtime rooms or voice: the game is solo and `server.js` only validates replays.
+- No matchmaking, session chat, friends picker, replays, realtime rooms or voice: the game is solo; its only platform session is the one-message practice session that posts a score.
 
 ## 7. Content, economy, and retention
 

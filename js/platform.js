@@ -152,7 +152,24 @@ export async function validateReplay(envelope) {
   }
 }
 
-// --- leaderboards (read-only; scores are written by the platform only) ----------
+// --- leaderboards ----------------------------------------------------------------
+// A won round's total goes through StarHermit.submitScores to score-script.js,
+// which posts it to the high-score board.
+
+/** Post a won round's total; resolves { posted, rank } (rank on high-score, or null). */
+export async function submitScore(total) {
+  const s = sdk();
+  if (!s || !s.signedIn || typeof s.submitScores !== 'function') return { posted: false, rank: null };
+  let keys;
+  try { keys = await s.submitScores({ 'high-score': total }); } catch { return { posted: false, rank: null }; }
+  if (!keys || !keys.includes('high-score')) return { posted: false, rank: null };
+  try {
+    const r = await s.leaderboard('high-score', { pageSize: 100 });
+    const me = ((r && r.items) || []).find((i) => i.userId === s.userId);
+    return { posted: true, rank: me ? me.rank : null };
+  } catch { return { posted: true, rank: null }; }
+}
+
 
 /** Rows of the game's first platform board, or null when none is configured. */
 export async function globalBoardRows({ pageSize = 20 } = {}) {
