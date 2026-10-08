@@ -35,7 +35,7 @@ export function detectPreset(gpu, opts = {}) {
   const g = String(gpu || '').toLowerCase();
   let p;
   if (/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(g)) p = 'low';
-  else if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|amd radeon(?! graphics)|apple m\d/.test(g)) p = 'high';
+  else if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|amd radeon(?!.*graphics)|apple m\d/.test(g)) p = 'high';
   else p = 'balanced';
   // Phones and tablets: Auto never goes above Balanced (heat and battery).
   if (opts.mobile && PRESETS.indexOf(p) > PRESETS.indexOf('balanced')) p = 'balanced';
