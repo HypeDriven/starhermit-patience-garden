@@ -28,7 +28,7 @@ function ensureContext() {
     const g = ctx.createGain();
     g.gain.value = BUS[name];
     g.connect(master);
-    buses[name] = g;
+    buses[name] = (globalThis.GameOptions ? globalThis.GameOptions.tagBus(g, name) : g);
   }
   return ctx;
 }
@@ -68,7 +68,7 @@ export function setMuted(m) {
 function blip(bus, { freq = 440, dur = 0.08, type = 'sine', gain = 0.2, slide = 0, delay = 0 }) {
   if (!ctx) return;
   const t = ctx.currentTime + delay;
-  const osc = ctx.createOscillator();
+  const osc = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createOscillator(), bus) : ctx.createOscillator());
   const g = ctx.createGain();
   osc.type = type;
   osc.frequency.setValueAtTime(freq, t);
@@ -89,7 +89,7 @@ function thock(bus, { freq = 180, dur = 0.06, gain = 0.25 }) {
   const buf = ctx.createBuffer(1, len, ctx.sampleRate);
   const data = buf.getChannelData(0);
   for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2;
-  const src = ctx.createBufferSource();
+  const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), bus) : ctx.createBufferSource());
   src.buffer = buf;
   const f = ctx.createBiquadFilter();
   f.type = 'lowpass';
@@ -131,7 +131,7 @@ function trySample(eventName) {
   if (!sample) return false;
   const cached = sampleCache.get(sample);
   if (cached instanceof AudioBuffer) {
-    const src = ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), null) : ctx.createBufferSource());
     src.buffer = cached;
     src.connect(buses.effects);
     src.start();
@@ -194,14 +194,14 @@ function startAmbience() {
     last = last * 0.96 + white * 0.04; // pinkish
     data[i] = last * 2.4;
   }
-  const src = ctx.createBufferSource();
+  const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createBufferSource(), null) : ctx.createBufferSource());
   src.buffer = buf;
   src.loop = true;
   const f = ctx.createBiquadFilter();
   f.type = 'bandpass';
   f.frequency.value = 900;
   f.Q.value = 0.4;
-  const lfo = ctx.createOscillator();
+  const lfo = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx.createOscillator(), null) : ctx.createOscillator());
   const lfoGain = ctx.createGain();
   lfo.frequency.value = 0.07;
   lfoGain.gain.value = 120;

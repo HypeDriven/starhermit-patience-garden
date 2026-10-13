@@ -1889,8 +1889,8 @@ export function createRenderer(opts) {
     if (key !== builtPostKey) { builtPostKey = key; buildPost(); }
 
     renderer.info.reset();
-    if (composer) composer.render(dt);
-    else renderer.render(scene, camera);
+    if (composer) (globalThis.GameOptions ? globalThis.GameOptions.draw(composer.renderer, () => composer.render(dt)) : composer.render(dt));
+    else (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(scene, camera)) : renderer.render(scene, camera));
     statCalls = renderer.info.render.calls;
     statTris = renderer.info.render.triangles;
     rafId = requestAnimationFrame(frame);
