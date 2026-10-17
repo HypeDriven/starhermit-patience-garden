@@ -1,6 +1,6 @@
-// Patience Garden — strings for the Graphics settings section.
-// The rest of the game ships in English; this panel follows the browser
-// language (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT).
+// Patience Garden — strings for the Graphics settings section, in the nine
+// locales (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT).
+// ui.js picks the table for the game language (i18n.js).
 
 const EN = {
   section: 'Graphics',

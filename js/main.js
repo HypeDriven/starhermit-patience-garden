@@ -5,7 +5,7 @@
 
 import {
   createCustomGame, legalActions, canMove, resolveRun, totalScore, foundationCount,
-  hiddenCount, isFinished, cardName, rankOf, suitOf, RANK_LABELS, SUIT_SYMBOLS,
+  hiddenCount, isFinished, rankOf, suitOf, RANK_LABELS, SUIT_SYMBOLS,
 } from './rules.js';
 import { generateWinnableLayout } from './solver.js';
 import { Session } from './session.js';
@@ -16,11 +16,16 @@ import {
 import * as store from './storage.js';
 import * as audio from './audio.js';
 import * as platform from './platform.js';
-import { currentPlatformStrings } from './platform-i18n.js';
-import { createUI, fmtTime } from './ui.js';
+import { platformStrings } from './platform-i18n.js';
+import { pickGfxLocale } from './gfx-i18n.js';
+import { createUI, fmtTime, cardLabel } from './ui.js';
+import { T, N, initLanguage, onLanguage, getLang } from './i18n.js';
+import { mergeSaveDocs } from './save-merge.js';
 import { detectPreset, resolve as resolveGraphics, DEFAULT_GRAPHICS } from './gfx.js';
 
 const $ = (id) => document.getElementById(id);
+/** Account-control strings (platform-i18n.js) in the game language. */
+const platformText = () => platformStrings(pickGfxLocale([getLang()]));
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -41,24 +46,26 @@ let hintShown = null;
 let resolvingUntil = 0;      // input lock window (shortest resolution phase)
 let appState = 'title';
 
+// Refusal reasons (English keys, translated when shown).
 const INVALID_TEXT = {
-  'no-movable-card': 'That card cannot move — only uncovered cards and valid runs move.',
-  'run-to-foundation': 'Foundations take one card at a time.',
-  'wrong-foundation': 'Each foundation grows a single suit.',
-  'foundation-order': 'Foundations grow upward from the Ace, one rank at a time.',
-  'kings-only': 'Only a King may root in an empty row.',
-  'sequence-mismatch': 'Tableau runs descend in alternating colours.',
-  'same-pile': 'That card is already there.',
-  'bad-target': 'Cards can only move to a row or a foundation.',
-  'stock-empty': 'The stock is empty.',
-  'no-redeals-left': 'No recycles left in this ruleset.',
-  'nothing-to-undo': 'Nothing to undo yet.',
-  'undo-disabled': 'Undo is disabled in this ruleset.',
-  'not-auto-finishable': 'Auto-finish needs an empty stock and no hidden cards.',
-  'lesson-step': 'Follow the lesson step — try the highlighted action.',
-  'game-over': 'This round has ended.',
-  'paused': 'The game is paused.',
+  'no-movable-card': N('That card cannot move — only uncovered cards and valid runs move.'),
+  'run-to-foundation': N('Foundations take one card at a time.'),
+  'wrong-foundation': N('Each foundation grows a single suit.'),
+  'foundation-order': N('Foundations grow upward from the Ace, one rank at a time.'),
+  'kings-only': N('Only a King may root in an empty row.'),
+  'sequence-mismatch': N('Tableau runs descend in alternating colors.'),
+  'same-pile': N('That card is already there.'),
+  'bad-target': N('Cards can only move to a row or a foundation.'),
+  'stock-empty': N('The stock is empty.'),
+  'no-redeals-left': N('No recycles left in this ruleset.'),
+  'nothing-to-undo': N('Nothing to undo yet.'),
+  'undo-disabled': N('Undo is disabled in this ruleset.'),
+  'not-auto-finishable': N('Auto-finish needs an empty stock and no hidden cards.'),
+  'lesson-step': N('Follow the lesson step — try the highlighted action.'),
+  'game-over': N('This round has ended.'),
+  'paused': N('The game is paused.'),
 };
+const MODE_NAMES = { learn: N('Lesson'), journey: N('Journey'), daily: N('Daily'), practice: N('Practice'), challenge: N('Challenge'), score: N('Score Chase') };
 
 // ---------------------------------------------------------------------------
 // UI handlers
@@ -92,7 +99,9 @@ const ui = createUI({
   onShowScores: () => {
     ui.renderScores(store.loadScores().entries);
     ui.openOverlay('scores');
+    lastGlobalBoards = null;
     loadGlobalBoards().then((boards) => {
+      lastGlobalBoards = boards;
       if (boards && !document.getElementById('screen-scores').hidden) {
         ui.renderScores(store.loadScores().entries, boards);
       }
@@ -219,6 +228,7 @@ function boardIs2D() {
 // Renderer lifecycle
 // ---------------------------------------------------------------------------
 
+let compatKey = null;
 async function ensureRenderer() {
   if (renderer || rendererFailed || boardIs2D()) return renderer;
   try {
@@ -238,7 +248,8 @@ async function ensureRenderer() {
     console.warn('3D unavailable, falling back to 2D:', err);
     renderer = null;
     rendererFailed = true;
-    ui.compatNote('3D graphics are unavailable in this browser — switched to the 2D card table. Your progress is safe.');
+    compatKey = N('3D graphics are unavailable in this browser — switched to the 2D card table. Your progress is safe.');
+    ui.compatNote(T(compatKey));
   }
   return renderer;
 }
@@ -362,14 +373,14 @@ async function startGame() {
   const config = pendingConfig;
   if (!config) return;
   appState = 'preparing';
-  ui.toast('Dealing…');
+  ui.toast(T('Dealing…'));
 
   let initialState, opts;
   if (config.mode === 'learn') {
     const lesson = lessonById(config.lessonId);
     if (!lesson) { // stale config — never wedge on "Dealing…"
       ui.hideToast();
-      ui.toast('That lesson is unavailable — pick another.', true);
+      ui.toast(T('That lesson is unavailable — pick another.'), true);
       ui.showScreen('learn');
       refreshScreens();
       appState = 'title';
@@ -394,7 +405,7 @@ async function startGame() {
 
     if (!descriptor) { // unknown content (e.g. stale config) — never wedge on "Dealing…"
       ui.hideToast();
-      ui.toast('That table is unavailable — pick another.', true);
+      ui.toast(T('That table is unavailable — pick another.'), true);
       ui.showScreen('modes');
       refreshScreens();
       appState = 'title';
@@ -439,9 +450,8 @@ async function startGame() {
   ui.hideToast(); // the "Dealing…" notice must not linger over active play
   ui.setRailsCollapsed(matchMedia('(max-width: 1023px)').matches);
 
-  const names = { learn: 'Lesson', journey: 'Journey', daily: 'Daily', practice: 'Practice', challenge: 'Challenge', score: 'Score Chase' };
-  ui.updateHUD({ modeName: names[session.mode] || session.mode, seed: session.state.seed.toString(16) });
-  ui.announce(`${names[session.mode]} started. ${objectiveText()}`);
+  ui.updateHUD({ modeName: T(MODE_NAMES[session.mode] || session.mode), seed: session.state.seed.toString(16) });
+  ui.announce(T('{mode} started. {objective}', { mode: T(MODE_NAMES[session.mode] || session.mode), objective: objectiveText() }));
   appState = 'active';
   track('round-start', { mode: session.mode });
   audio.unlockAudio();
@@ -484,7 +494,7 @@ function resumeGame() {
   session.resume();
   ui.closeOverlay('pause');
   appState = 'active';
-  ui.announce('Resumed.');
+  ui.announce(T('Resumed.'));
 }
 
 // ---------------------------------------------------------------------------
@@ -493,12 +503,12 @@ function resumeGame() {
 
 function objectiveText() {
   if (!session) return '';
-  if (session.mode === 'learn') return 'Follow the lesson steps.';
-  if (session.constraint?.type === 'moves') return `Win in ${session.constraint.limit} moves or fewer.`;
-  if (session.constraint?.type === 'time') return `Win within ${fmtTime(session.constraint.limitMs)}.`;
+  if (session.mode === 'learn') return T('Follow the lesson steps.');
+  if (session.constraint?.type === 'moves') return T('Win in {n} moves or fewer.', { n: session.constraint.limit });
+  if (session.constraint?.type === 'time') return T('Win within {time}.', { time: fmtTime(session.constraint.limitMs) });
   if (session.constraint?.type === 'redeals') return session.constraint.limit === 0
-    ? 'Win without recycling the stock.' : `Win with at most ${session.constraint.limit} recycles.`;
-  return 'Build every foundation, Ace to King.';
+    ? T('Win without recycling the stock.') : T('Win with at most {n} recycles.', { n: session.constraint.limit });
+  return T('Build every foundation, Ace to King.');
 }
 
 function updateHUDFull() {
@@ -508,14 +518,14 @@ function updateHUDFull() {
     score: totalScore(s),
     moves: s.moves,
     ms: session.elapsedMs(),
-    goal: `${foundationCount(s)}/${13 * s.ruleset.suitCount} banked · ${hiddenCount(s)} hidden`,
+    goal: T('{banked}/{total} banked · {hidden} hidden', { banked: foundationCount(s), total: 13 * s.ruleset.suitCount, hidden: hiddenCount(s) }),
     objective: objectiveText(),
     foundations: s.foundations.map((f) => f.length),
-    assists: `assists: ${s.undos} undo · ${s.hints} hints`,
+    assists: T('assists: {undos} undo · {hints} hints', { undos: s.undos, hints: s.hints }),
   };
-  if (session.constraint?.type === 'moves') hud.constraint = `${Math.max(0, session.constraint.limit - s.moves)} moves left`;
-  if (session.constraint?.type === 'time') hud.constraint = `${fmtTime(Math.max(0, session.constraint.limitMs - session.elapsedMs()))} left`;
-  if (session.constraint?.type === 'redeals') hud.constraint = `recycles used: ${s.redealsUsed}/${session.constraint.limit === 0 ? 0 : s.ruleset.maxRedeals}`;
+  if (session.constraint?.type === 'moves') hud.constraint = T('{n} moves left', { n: Math.max(0, session.constraint.limit - s.moves) });
+  if (session.constraint?.type === 'time') hud.constraint = T('{time} left', { time: fmtTime(Math.max(0, session.constraint.limitMs - session.elapsedMs())) });
+  if (session.constraint?.type === 'redeals') hud.constraint = T('recycles used: {used}/{max}', { used: s.redealsUsed, max: session.constraint.limit === 0 ? 0 : s.ruleset.maxRedeals });
   ui.updateHUD(hud);
   const acts = legalActions(s);
   ui.setActions({
@@ -538,13 +548,13 @@ function updateCoach() {
     return;
   }
   if (step.expect.type === 'ack') {
-    ui.coach(`${step.text}<div style="margin-top:10px;text-align:right"><button class="btn primary" id="coach-ack">Continue</button></div>`);
+    ui.coach(`${T(step.text)}<div style="margin-top:10px;text-align:right"><button class="btn primary" id="coach-ack">${T('Continue')}</button></div>`);
     document.getElementById('coach-ack').addEventListener('click', () => {
       const r = session.dispatch({ type: 'ack' });
       if (r.ok) afterDispatch(r.events);
     });
   } else {
-    ui.coach(step.text);
+    ui.coach(T(step.text));
   }
 }
 
@@ -578,15 +588,15 @@ function handleTap(target) {
     if (target.zone === 'foundation' && s.foundations[target.pile].length === 0) return;
     // try to select a movable card
     const sel = normalizeSelection(target);
-    if (target.zone === 'waste' && s.waste.length === 0) { invalid('The waste is empty — draw first.'); return; }
+    if (target.zone === 'waste' && s.waste.length === 0) { invalid(T('The waste is empty — draw first.')); return; }
     if (resolveRun(s, sel)) {
       selection = sel;
       hintShown = null;
       audio.playSfx('select');
-      ui.announce(`Selected ${describeSelection()}. Choose a destination.`);
+      ui.announce(T('Selected {what}. Choose a destination.', { what: describeSelection() }));
       refreshBoard();
     } else {
-      invalid('That card is covered or cannot move.');
+      invalid(T('That card is covered or cannot move.'));
     }
     return;
   }
@@ -616,7 +626,7 @@ function handleTap(target) {
       return;
     }
     // explain, then reselect the tapped card when it is itself movable
-    invalid(INVALID_TEXT[verdict.reason] || 'That move is not legal.');
+    invalid(T(INVALID_TEXT[verdict.reason] || N('That move is not legal.')));
     const alt = normalizeSelection(target);
     selection = (target.index !== -1 && resolveRun(s, alt)) ? alt : null;
     if (selection && renderer) renderer.setSelection(selection);
@@ -639,7 +649,7 @@ function handleDouble(target) {
   const sel = normalizeSelection(target);
   const s = session.state;
   const run = resolveRun(s, sel);
-  if (!run || run.cards.length !== 1) { invalid('Only a single exposed card can bank.'); return; }
+  if (!run || run.cards.length !== 1) { invalid(T('Only a single exposed card can bank.')); return; }
   const card = run.cards[0];
   attemptMove(sel, { zone: 'foundation', pile: suitOf(card) });
 }
@@ -647,14 +657,27 @@ function handleDouble(target) {
 function describeSelection() {
   if (!selection) return '';
   const run = resolveRun(session.state, selection);
-  if (!run) return 'card';
-  return run.cards.length > 1 ? `a ${run.cards.length}-card run starting at ${cardName(run.cards[0])}` : cardName(run.cards[0]);
+  if (!run) return T('card');
+  return run.cards.length > 1 ? T('a {n}-card run starting at {card}', { n: run.cards.length, card: cardLabel(run.cards[0]) }) : cardLabel(run.cards[0]);
+}
+
+/** A hint/action in words, in the game language (session.describeAction is the English original). */
+function describeAction(a) {
+  if (!a) return T('No moves available.');
+  if (a.type === 'draw') return session.state.stock.length > 0 ? T('Draw from the stock.') : T('Recycle the waste into a fresh stock.');
+  const card = a.cards[0];
+  const name = `${RANK_LABELS[rankOf(card)]}${SUIT_SYMBOLS[suitOf(card)]}`;
+  const from = a.from.zone === 'waste' ? T('the waste') : a.from.zone === 'foundation' ? T('foundation {n}', { n: a.from.pile + 1 }) : T('row {n}', { n: a.from.pile + 1 });
+  const to = a.to.zone === 'foundation' ? T('its foundation') : T('row {n}', { n: a.to.pile + 1 });
+  return a.cards.length > 1
+    ? T('Move {card} ({n}-card run) from {from} to {to}.', { card: name, n: a.cards.length, from, to })
+    : T('Move {card} from {from} to {to}.', { card: name, from, to });
 }
 
 function attemptMove(from, to) {
   const verdict = canMove(session.state, from, to);
   if (!verdict.ok) {
-    invalid(INVALID_TEXT[verdict.reason] || 'That move is not legal.');
+    invalid(T(INVALID_TEXT[verdict.reason] || N('That move is not legal.')));
     clearSelection();
     refreshBoard(true);
     return;
@@ -667,9 +690,9 @@ function tryDispatch(cmd) {
   const r = session.dispatch(cmd);
   if (!r.ok) {
     if (r.error === 'lesson-step') {
-      invalid(INVALID_TEXT['lesson-step']);
+      invalid(T(INVALID_TEXT['lesson-step']));
     } else {
-      invalid(INVALID_TEXT[r.error] || `Cannot: ${r.error}`);
+      invalid(INVALID_TEXT[r.error] ? T(INVALID_TEXT[r.error]) : T('Cannot: {reason}', { reason: r.error }));
     }
     return;
   }
@@ -689,8 +712,8 @@ function afterDispatch(events) {
   }
   const moveEvt = events.find((e) => e.type === 'move');
   if (moveEvt) ui.announce(moveEvt.to.zone === 'foundation'
-    ? `${cardName(moveEvt.cards[0])} banked. ${foundationCount(session.state)} of ${13 * session.state.ruleset.suitCount} banked.`
-    : `${cardName(moveEvt.cards[0])} moved to row ${moveEvt.to.pile + 1}.`);
+    ? T('{card} banked. {n} of {total} banked.', { card: cardLabel(moveEvt.cards[0]), n: foundationCount(session.state), total: 13 * session.state.ruleset.suitCount })
+    : T('{card} moved to row {n}.', { card: cardLabel(moveEvt.cards[0]), n: moveEvt.to.pile + 1 }));
   if (events.some((e) => e.type === 'flip')) audio.playSfx('reveal');
 
   audio.setMusicIntensity(Math.min(1, foundationCount(session.state) / 52 + 0.25));
@@ -728,24 +751,24 @@ function invalid(text) {
 function doUndo() {
   if (!canAcceptInput()) return;
   const r = session.undo();
-  if (!r.ok) { invalid(INVALID_TEXT[r.error] || 'Cannot undo.'); return; }
+  if (!r.ok) { invalid(T(INVALID_TEXT[r.error] || N('Cannot undo.'))); return; }
   audio.playSfx('undo');
   clearSelection();
   if (renderer) renderer.setState(session.state);
   refreshBoard();
   updateHUDFull();
-  ui.announce('Undone.');
+  ui.announce(T('Undone.'));
 }
 
 function doHint() {
   if (!session || !canAcceptInput()) return;
   const h = session.hint();
-  if (!h) { invalid('No moves available.'); return; }
+  if (!h) { invalid(T('No moves available.')); return; }
   hintShown = h;
   audio.playSfx('hint');
-  const text = session.describeAction(h);
-  ui.toast(`Hint: ${text}`);
-  ui.announce(`Hint: ${text}`);
+  const text = T('Hint: {text}', { text: describeAction(h) });
+  ui.toast(text);
+  ui.announce(text);
   if (renderer) {
     renderer.setHint(h.type === 'draw' ? { draw: true } : { from: h.from, to: h.to });
     setTimeout(() => renderer && renderer.setHint(null), 2600);
@@ -803,19 +826,28 @@ function finishLesson() {
   mirrorCloud();
   const lessonIndex = LESSONS.findIndex((l) => l.id === lessonId);
   const next = LESSONS[lessonIndex + 1];
-  ui.renderResults({
-    headline: 'Lesson complete',
-    sub: lessonById(lessonId).title,
+  const breakdown = { rows: [[N('Lesson steps'), session.lessonIndex]], total: 0, moves: session.state.moves, invalids: 0, undos: 0, hints: 0, ms: session.elapsedMs() };
+  const lessonsDone = Object.keys(progress.lessons).length;
+  resultsView = () => ({
+    headline: T('Lesson complete'),
+    sub: T(lessonById(lessonId).title),
     stars: 0,
-    breakdown: { rows: [['Lesson steps', session.lessonIndex]], total: 0, moves: session.state.moves, invalids: 0, undos: 0, hints: 0, ms: session.elapsedMs() },
-    progressNote: `${Object.keys(progress.lessons).length}/${LESSONS.length} lessons complete`,
+    breakdown,
+    progressNote: T('{n}/{total} lessons complete', { n: lessonsDone, total: LESSONS.length }),
     achievements: newly,
-    nextLabel: next ? `Next: ${next.title}` : null,
+    nextLabel: next ? T('Next: {title}', { title: T(next.title) }) : null,
   });
+  resultsExtra = { validation: null, lb: null };
+  ui.renderResults(resultsView());
   resultsContext = { mode: 'learn', next };
 }
 
 let resultsContext = null;
+// The open results screen, rebuilt in the game language on demand:
+// resultsView() → renderResults payload; resultsExtra holds the replay
+// validation verdict and the leaderboard line that arrive afterwards.
+let resultsView = null;
+let resultsExtra = { validation: null, lb: null };
 
 function finishRound() {
   const b = session.breakdown();
@@ -844,8 +876,8 @@ function finishRound() {
   if (stats.foundationsBanked >= 1000 && store.unlockAchievement('thousand_leaves')) newly.push({ name: 'Thousand Leaves' });
 
   let stars = 0;
-  let progressNote = '';
-  let nextLabel = null;
+  let progressNote = () => '';
+  let nextLabel = () => null;
 
   if (session.mode === 'journey' && session._journeyStage) {
     const stage = session._journeyStage;
@@ -862,12 +894,13 @@ function finishRound() {
       if (stage.index + 1 >= 20 && store.unlockAchievement('head_gardener')) newly.push({ name: 'Head Gardener' });
       const nextIdx = Math.min(stage.index + 1, JOURNEY.length - 1);
       const isLast = stage.index >= JOURNEY.length - 1;
-      nextLabel = isLast ? null : `Next: ${JOURNEY[nextIdx].title}`;
+      nextLabel = () => (isLast ? null : T('Next: {title}', { title: T(JOURNEY[nextIdx].title) }));
       resultsContext = { mode: 'journey', next: nextIdx, isLast };
-      progressNote = `Journey: ${Object.keys(progress.journey).length}/${JOURNEY.length} stages`;
+      const stagesDone = Object.keys(progress.journey).length;
+      progressNote = () => T('Journey: {n}/{total} stages', { n: stagesDone, total: JOURNEY.length });
     } else {
       resultsContext = { mode: 'journey', next: stage.index, retry: true };
-      nextLabel = 'Try again';
+      nextLabel = () => T('Try again');
     }
   } else if (session.mode === 'daily') {
     const day = dailyInfo().day;
@@ -878,7 +911,7 @@ function finishRound() {
     }
     store.addScore({ mode: 'daily', seed: b.seed, rulesetKey: 'daily', score: b.total, moves: b.moves, ms: b.ms, assists: b.undos + b.hints > 0, date: day, status: b.status, invalids: b.invalids, sessionId: session.sessionId });
     resultsContext = { mode: 'daily' };
-    progressNote = won ? 'Daily complete — see you tomorrow.' : 'The daily remains unconquered.';
+    progressNote = () => (won ? T('Daily complete — see you tomorrow.') : T('The daily remains unconquered.'));
   } else if (session.mode === 'challenge') {
     const ch = challengeById(session.contentId);
     if (won) {
@@ -895,7 +928,7 @@ function finishRound() {
       store.addScore({ mode: 'score', seed: b.seed, rulesetKey: session.contentId, score: b.total, moves: b.moves, ms: b.ms, assists: b.undos + b.hints > 0, status: b.status, invalids: b.invalids, sessionId: session.sessionId });
     }
     resultsContext = { mode: 'score' };
-    progressNote = 'Saved to the local board.';
+    progressNote = () => T('Saved to the local board.');
   } else {
     resultsContext = { mode: 'practice' };
   }
@@ -905,17 +938,22 @@ function finishRound() {
   mirrorCloud();
   track('round-end', { mode: session.mode, won, moves: b.moves });
 
-  ui.renderResults({
-    headline: won ? 'The garden blooms' : 'The garden rests',
+  const stageTitle = session.mode === 'journey' && session._journeyStage ? session._journeyStage.title : null;
+  const mode = session.mode;
+  const LOSS = { 'conceded': N('You left the table.'), 'move-limit-exceeded': N('Out of moves.'), 'time-limit-exceeded': N('Out of time.'), 'redeal-limit-exceeded': N('Too many recycles.') };
+  resultsView = () => ({
+    headline: won ? T('The garden blooms') : T('The garden rests'),
     sub: won
-      ? (session.mode === 'journey' && session._journeyStage ? `${session._journeyStage.title} — complete` : 'Every foundation stands complete.')
-      : ({ 'conceded': 'You left the table.', 'move-limit-exceeded': 'Out of moves.', 'time-limit-exceeded': 'Out of time.', 'redeal-limit-exceeded': 'Too many recycles.' })[b.reason] || 'Round over.',
+      ? (stageTitle ? T('{title} — complete', { title: T(stageTitle) }) : T('Every foundation stands complete.'))
+      : T(LOSS[b.reason] || N('Round over.')),
     stars,
     breakdown: b,
-    progressNote,
+    progressNote: progressNote(),
     achievements: newly,
-    nextLabel: nextLabel || (session.mode !== 'journey' ? 'New deal' : null),
+    nextLabel: nextLabel() || (mode !== 'journey' ? T('New deal') : null),
   });
+  resultsExtra = { validation: null, lb: null };
+  ui.renderResults(resultsView());
   submitRankedReplay();
   postToLeaderboard(won, b.total);
 }
@@ -926,13 +964,33 @@ function postToLeaderboard(won, total) {
   const line = $('results-lb');
   if (!line) return;
   if (!won || !platform.isHosted()) { line.hidden = true; return; }
-  const t = currentPlatformStrings();
   line.hidden = false;
-  line.textContent = t.lbPosting;
+  resultsExtra.lb = { pending: true };
+  renderLbLine();
+  const extra = resultsExtra;
   platform.submitScore(total).then((r) => {
-    line.textContent = !r.posted ? t.lbNotPosted
-      : r.rank ? t.lbRank.replace('{rank}', r.rank) : t.lbPosted;
+    extra.lb = r;
+    if (extra === resultsExtra) renderLbLine();
   });
+}
+
+function renderLbLine() {
+  const line = $('results-lb');
+  const r = resultsExtra.lb;
+  if (!line || !r) return;
+  const t = platformText();
+  line.textContent = r.pending ? t.lbPosting : !r.posted ? t.lbNotPosted
+    : r.rank ? t.lbRank.replace('{rank}', r.rank) : t.lbPosted;
+}
+
+/** Replay-validation suffix on the progress line (Daily / Score Chase). */
+function renderValidation() {
+  const v = resultsExtra.validation;
+  const note = $('results-progress');
+  if (!v || !note || !resultsView) return;
+  const base = resultsView().progressNote;
+  if (v.ok && v.accepted) note.textContent = T('{note} · validated ✓', { note: base });
+  else if (v.ok) note.textContent = T('{note} · not validated ({reason}) — kept local', { note: base, reason: v.reason });
 }
 
 function resultsAction(action) {
@@ -977,7 +1035,7 @@ function refreshTitle() {
     journeyDone: done,
     journeyTotal: JOURNEY.length,
     dailyDone: todayDone,
-    buildNote: `Patience Garden · content v${CONTENT_VERSION}`,
+    buildNote: T('Patience Garden · content v{version}', { version: CONTENT_VERSION }),
   });
 }
 
@@ -1031,15 +1089,15 @@ function kbAnnounce() {
   const s = session?.state;
   if (!s) return;
   let text = '';
-  if (t.zone === 'stock') text = s.stock.length ? `Stock, ${s.stock.length} cards` : 'Stock empty';
-  else if (t.zone === 'waste') text = s.waste.length ? `Waste: ${cardName(s.waste[s.waste.length - 1])}` : 'Waste empty';
-  else if (t.zone === 'foundation') text = s.foundations[t.pile].length ? `Foundation: ${cardName(s.foundations[t.pile][s.foundations[t.pile].length - 1])}` : `Foundation ${SUIT_SYMBOLS[t.pile]}, empty`;
+  if (t.zone === 'stock') text = s.stock.length ? T('Stock, {n} cards', { n: s.stock.length }) : T('Stock empty');
+  else if (t.zone === 'waste') text = s.waste.length ? T('Waste: {card}', { card: cardLabel(s.waste[s.waste.length - 1]) }) : T('Waste empty');
+  else if (t.zone === 'foundation') text = s.foundations[t.pile].length ? T('Foundation: {card}', { card: cardLabel(s.foundations[t.pile][s.foundations[t.pile].length - 1]) }) : T('Foundation {suit}, empty', { suit: SUIT_SYMBOLS[t.pile] });
   else {
     const p = s.tableau[t.pile];
     const top = p[p.length - 1];
-    text = p.length ? `Row ${t.pile + 1}: ${p.length} cards, top ${top.up ? cardName(top.c) : 'face down'}` : `Row ${t.pile + 1}, empty`;
+    text = p.length ? T('Row {n}: {count} cards, top {card}', { n: t.pile + 1, count: p.length, card: top.up ? cardLabel(top.c) : T('face down') }) : T('Row {n}, empty', { n: t.pile + 1 });
   }
-  ui.announce(text + (selection ? '. Placing ' + describeSelection() : '. Press Enter to select.'));
+  ui.announce(selection ? T('{where}. Placing {what}', { where: text, what: describeSelection() }) : T('{where}. Press Enter to select.', { where: text }));
   if (renderer) renderer.setLegalTargets(selection ? legalTargetsForSelection() : [t]);
 }
 
@@ -1183,7 +1241,7 @@ document.addEventListener('visibilitychange', () => {
     audio.setBackgrounded(false);
     if (awayAt && session && appState === 'paused') {
       const away = Math.round((Date.now() - awayAt) / 1000);
-      if (away > 3) ui.toast(`While you were away: the garden waited ${fmtTime(away * 1000)} (clock paused).`);
+      if (away > 3) ui.toast(T('While you were away: the garden waited {time} (clock paused).', { time: fmtTime(away * 1000) }));
     }
     awayAt = null;
   }
@@ -1224,7 +1282,7 @@ function track(event, data = {}) {
 // Without a launch token none of this runs and play is purely local.
 // ---------------------------------------------------------------------------
 
-const SYNC_LABELS = { syncing: 'saving…', synced: 'cloud saved', error: 'cloud save failed' };
+const SYNC_LABELS = { syncing: N('saving…'), synced: N('cloud saved'), error: N('cloud save failed') };
 const SAVE_DOC_KEYS = ['settings', 'progress', 'stats', 'achievements', 'scores'];
 
 function currentSaveDoc() {
@@ -1254,15 +1312,22 @@ function mirrorCloud() {
 
 function updatePlayerLine() {
   const name = platform.nickname();
-  ui.setPlayerInfo(name, name ? (SYNC_LABELS[platform.syncStatus()] || '') : null);
+  ui.setPlayerInfo(name, name ? T(SYNC_LABELS[platform.syncStatus()] || '') : null);
   ui.setAccountButtons({ signIn: platform.canSignIn(), invite: !!platform.inviteLink() });
 }
 
-/** Remote-preferred load: adopt the cloud doc, preserving the replaced local one. */
-function applyRemoteDoc(doc) {
+/**
+ * Merge the cloud doc with this device's docs (save-merge.js: the account's
+ * settings, the better record of every progress entry) and adopt the result,
+ * keeping a backup of the replaced local docs. Returns true when the merge
+ * differs from the cloud copy, i.e. it must be written back.
+ */
+function applyRemoteDoc(remote) {
   const local = currentSaveDoc();
+  const doc = mergeSaveDocs(remote, local);
+  const needsPush = SAVE_DOC_KEYS.some((k) => JSON.stringify(remote[k]) !== JSON.stringify(doc[k]));
   const differs = SAVE_DOC_KEYS.some((k) => JSON.stringify(local[k]) !== JSON.stringify(doc[k]));
-  if (!differs) return;
+  if (!differs) return needsPush;
   store.backupLocalDocs(local);
   store.saveSettings(doc.settings);
   store.saveProgress(doc.progress);
@@ -1274,8 +1339,10 @@ function applyRemoteDoc(doc) {
   progress = store.loadProgress();
   stats = store.loadStats();
   applySettings();
+  ui.renderSettings(settings);
   refreshScreens();
   if (session) updateHUDFull();
+  return needsPush;
 }
 
 /** Platform settings KV wins over local values for known preference keys. */
@@ -1296,7 +1363,7 @@ function applyRemoteSettings(remote) {
 }
 
 async function inviteFriend() {
-  const t = currentPlatformStrings();
+  const t = platformText();
   const link = platform.inviteLink();
   if (!link) return;
   try {
@@ -1307,24 +1374,34 @@ async function inviteFriend() {
   }
 }
 
-function bootPlatform() {
-  const t = currentPlatformStrings();
+function labelAccount() {
+  const t = platformText();
   ui.setAccountLabels({ signIn: t.signIn, invite: t.invite });
+}
+
+function bootPlatform() {
+  labelAccount();
   ui.onAccountAction({ signIn: () => platform.signIn(), invite: () => inviteFriend() });
   const boot = platform.initPlatform();
   platform.loadBindings(DEFAULT_BINDINGS).then(applyBindings);
   platform.onAuthChange(({ signedIn }) => {
-    if (!signedIn) ui.toast(t.signedOut);
+    if (!signedIn) ui.toast(platformText().signedOut);
     updatePlayerLine();
   });
   updatePlayerLine();
   if (!boot.hosted) return;
   platform.onSyncStatus(updatePlayerLine);
   cloudReady = false;
+  // Another device saved first: the SDK refused the write; re-read, merge, save again.
+  platform.onSaveConflict(async () => {
+    const remote = await platform.loadCloudDoc().catch(() => null);
+    if (remote) applyRemoteDoc(remote);
+    mirrorCloud();
+  });
   boot.ready.catch(() => null).then(async (remoteDoc) => {
     cloudReady = true;
-    if (remoteDoc) applyRemoteDoc(remoteDoc);
-    if (cloudMirrorHeld) { cloudMirrorHeld = false; mirrorCloud(); } // pushes the docs as they stand after adoption
+    if (remoteDoc && applyRemoteDoc(remoteDoc)) cloudMirrorHeld = true; // write the merge back
+    if (cloudMirrorHeld) { cloudMirrorHeld = false; mirrorCloud(); } // pushes the docs as they stand after the merge
     applyRemoteSettings(await platform.loadRemoteSettings());
     platform.syncSettings(settings);
     updatePlayerLine();
@@ -1338,19 +1415,20 @@ function submitRankedReplay() {
   if (session.mode !== 'daily' && session.mode !== 'score') return;
   const note = $('results-progress');
   if (!note) return;
-  const baseNote = note.textContent;
+  const extra = resultsExtra;
   platform.validateReplay(session.envelope).then((v) => {
     const resultsOpen = !document.getElementById('screen-results').hidden;
-    if (!resultsOpen) return;
-    if (v.ok && v.accepted) note.textContent = `${baseNote} · validated ✓`;
-    else if (v.ok) note.textContent = `${baseNote} · not validated (${v.reason}) — kept local`;
+    if (!resultsOpen || extra !== resultsExtra) return;
+    extra.validation = v;
+    renderValidation();
   });
 }
 
 // Read-only global board for the scores overlay; local records always shown.
+let lastGlobalBoards = null;
 function loadGlobalBoards() {
   if (!platform.isHosted()) return Promise.resolve(null);
-  return platform.globalBoardRows().then((rows) => (rows ? [{ title: 'Global', rows }] : null), () => null);
+  return platform.globalBoardRows().then((rows) => (rows ? [{ title: N('Global'), rows }] : null), () => null);
 }
 
 // ---------------------------------------------------------------------------
@@ -1358,6 +1436,8 @@ function loadGlobalBoards() {
 // ---------------------------------------------------------------------------
 
 function init() {
+  // Game language first (sh-language.js): every screen renders in it.
+  initLanguage();
   bootPlatform();
   audio.initAudio(2024);
   ui.renderGraphics(graphicsSettings(), graphicsInfo());
@@ -1384,13 +1464,41 @@ function init() {
 
   // resume offer: Play becomes snapshot-aware; falls back to mode select
   refreshPlayButton();
+  onLanguage(relocalize);
+}
+
+// Live language switch: markup re-applies itself (i18n.js); everything built
+// in code re-renders here in place. The round, selection and open screens stay.
+function relocalize() {
+  ui.refreshLanguage();
+  refreshScreens();
+  labelAccount();
+  updatePlayerLine();
+  if (!$('screen-setup').hidden) {
+    const cfg = ui.getSetupConfig();
+    if (cfg) ui.renderSetup(cfg.mode, setupContext(cfg.mode, cfg.stage ?? null), cfg);
+  }
+  if (session) {
+    ui.updateHUD({ modeName: T(MODE_NAMES[session.mode] || session.mode) });
+    updateHUDFull();
+    updateCoach();
+    refreshBoard();
+  }
+  if (!$('screen-results').hidden && resultsView) {
+    ui.renderResults(resultsView(), { reopen: false });
+    renderValidation();
+    renderLbLine();
+  }
+  if (!$('screen-profile').hidden) ui.renderProfile(stats, store.loadAchievements(), progress, platform.nickname());
+  if (!$('screen-scores').hidden) ui.renderScores(store.loadScores().entries, lastGlobalBoards);
+  if (compatKey) ui.compatNote(T(compatKey));
 }
 
 function refreshPlayButton() {
   const snap = store.loadSessionSnapshot();
   const playBtn = document.getElementById('btn-play');
   const hasSave = !!(snap && snap.state?.status === 'active');
-  playBtn.textContent = hasSave ? 'Resume garden' : 'Play';
+  playBtn.textContent = hasSave ? T('Resume garden') : T('Play');
 }
 
 async function resumeSavedGame() {
@@ -1414,7 +1522,7 @@ async function resumeSavedGame() {
   updateCoach();
   updateHUDFull();
   appState = 'active';
-  ui.announce('Resumed your saved garden.');
+  ui.announce(T('Resumed your saved garden.'));
   return true;
 }
 

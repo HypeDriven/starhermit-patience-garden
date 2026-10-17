@@ -14,7 +14,10 @@
  *
  * The whole flow runs twice: desktop 1280x800, then a fresh mobile context
  * 390x844 with touch. Page errors and console errors (minus benign GPU noise)
- * fail the run. Screenshots go to /tmp/patience-garden-e2e-<stage>-<vp>.png.
+ * fail the run. Each pass ends with a language step against a stubbed
+ * StarHermit API (Automatic → account fr-CA; Deutsch chosen mid-deal; report).
+ * Screenshots go to $E2E_SHOT_DIR (default: the OS temp dir) as
+ * patience-garden-e2e-<stage>-<vp>.png.
  *
  * `server.js` is the StarHermit authoritative script, so this file embeds its
  * own minimal static server on an ephemeral port.
@@ -23,7 +26,9 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-core';
+import { stubStarHermit, launchToken } from './starhermit-e2e.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const MIME = {
@@ -116,7 +121,7 @@ const waitInputReady = (page) =>
   page.waitForFunction(() => !window.__pg || !window.__pg.canAcceptInput || window.__pg.canAcceptInput());
 
 async function runPass(vpName, contextOpts) {
-  const SHOT = (n) => `/tmp/patience-garden-e2e-${n}-${vpName}.png`;
+  const SHOT = (n) => join(process.env.E2E_SHOT_DIR || tmpdir(), `patience-garden-e2e-${n}-${vpName}.png`);
   const context = await browser.newContext(contextOpts);
   const page = await context.newPage();
   const errors = [];
@@ -263,6 +268,79 @@ async function runPass(vpName, contextOpts) {
       await page.waitForSelector('#screen-title:not([hidden])');
       await page.waitForFunction(() => window.__pg.appState === 'title');
       await page.screenshot({ path: SHOT('home') });
+    });
+
+    await step(`${vpName}: language — Automatic follows the StarHermit preference; a choice mid-deal re-renders in place, syncs ui.language; report a problem`, async () => {
+      const calls = await stubStarHermit(page, { preferredLanguage: 'fr-CA' });
+      await page.goto('about:blank');
+      await page.goto(`${BASE}/#game_token=${launchToken()}`, { waitUntil: 'load' });
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA' && window.__pg && window.__pg.appState === 'title');
+      if ((await page.textContent('#btn-play')).trim() !== 'Jouer') throw new Error('title not in French');
+      await page.click('#btn-play');
+      await page.waitForSelector('#screen-modes:not([hidden])');
+      await page.locator('.mode-card-btn', { hasText: /^Entraînement$/ }).click();
+      await page.waitForSelector('#screen-setup:not([hidden])');
+      if (!/^Entraînement — choisissez une difficulté$/.test((await page.textContent('#setup-heading')).trim())) throw new Error('setup not in French');
+      await page.click('#btn-start-game');
+      await page.waitForFunction(() => window.__pg.appState === 'active');
+      await page.waitForSelector('#board-dom:not([hidden]) .pcard');
+      await waitInputReady(page);
+      await page.click('#btn-draw');
+      await page.waitForFunction(() => window.__pg.session.state.moves === 1);
+      const before = await page.evaluate(() => (({ stock, waste, tableau, foundations, moves, seed }) => JSON.stringify({ stock, waste, tableau, foundations, moves, seed }))(window.__pg.session.state));
+      await page.click('#btn-pause');
+      await page.waitForSelector('#screen-pause:not([hidden])');
+      await page.click('#btn-pause-settings');
+      await page.waitForSelector('#screen-settings:not([hidden])');
+      const choice = page.locator('[data-game-language="choice"]');
+      await choice.scrollIntoViewIfNeeded();
+      const autoLabel = await choice.locator('option').first().textContent();
+      if (autoLabel !== 'Automatique — Français (Canada)') throw new Error('Automatic label not resolved: ' + autoLabel);
+      await choice.selectOption('de-DE');
+      await page.waitForFunction(() => document.documentElement.lang === 'de-DE');
+      await page.waitForFunction(() => /Im Konto gespeichert/.test(document.querySelector('[data-game-language="status"]').textContent));
+      if (!calls.settings['ui.language'] || calls.settings['ui.language'].choice !== 'de-DE') throw new Error('ui.language not saved: ' + JSON.stringify(calls.settings));
+      if ((await page.textContent('#settings-heading')).trim() !== 'Einstellungen') throw new Error('settings heading not re-rendered');
+      if (!(await page.locator('#screen-settings').getByLabel('Alles stumm', { exact: true }).count())) throw new Error('settings rows not re-rendered');
+      if ((await page.textContent('#gfx-heading')).trim() !== 'Grafik') throw new Error('graphics box not re-rendered');
+      if ((await page.locator('#gfx-section [data-game-options-fps]').count()) !== 1) throw new Error('shared sections lost or duplicated');
+      if ((await page.locator('#gfx-section [data-game-language="choice"]').count()) !== 1) throw new Error('language section not in the Graphics host');
+      await page.locator('[data-game-report="title"]').scrollIntoViewIfNeeded();
+      await page.fill('[data-game-report="title"]', 'Test report');
+      await page.click('[data-game-report="send"]');
+      await page.waitForFunction(() => /Bericht gesendet/.test(document.querySelector('[data-game-report="status"]').textContent));
+      if (!calls.reports || !calls.reports[0] || calls.reports[0].kind !== 'bug') throw new Error('report not posted');
+      await page.locator('#settings-heading').scrollIntoViewIfNeeded();
+      await page.screenshot({ path: SHOT('lang-settings') });
+      await page.click('#btn-settings-close');
+      await page.waitForSelector('#screen-settings:not([hidden])', { state: 'hidden' });
+      if ((await page.textContent('#pause-heading')).trim() !== 'Pausiert' || (await page.textContent('#btn-resume')).trim() !== 'Fortsetzen') throw new Error('pause card not re-rendered');
+      await page.click('#btn-resume');
+      await page.waitForFunction(() => window.__pg.appState === 'active');
+      if ((await page.evaluate(() => (({ stock, waste, tableau, foundations, moves, seed }) => JSON.stringify({ stock, waste, tableau, foundations, moves, seed }))(window.__pg.session.state))) !== before) throw new Error('language change reset the deal');
+      if ((await page.textContent('#hud-mode-name')).trim() !== 'Übung' || !/abgelegt/.test(await page.textContent('#hud-goal'))) throw new Error('HUD not re-rendered');
+      if ((await page.textContent('#btn-draw')).trim() !== '⟳ Ziehen') throw new Error('tray not re-rendered');
+      if (!/^Reihe 1/.test(await page.locator('.pile-slot.tableau[data-pile="0"]').getAttribute('aria-label'))) throw new Error('board labels not re-rendered');
+      for (const id of ['btn-pause', 'btn-rail-toggle', 'btn-undo', 'btn-hint', 'btn-draw']) {
+        if (!(await page.locator('#' + id).isVisible())) continue; // the rail toggle exists below 1024 px only
+        const ok = await page.locator('#' + id).evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return r.right <= window.innerWidth + 0.5 && r.bottom <= window.innerHeight + 0.5 && (hit === el || el.contains(hit));
+        });
+        if (!ok) throw new Error(`#${id} covered or cut off in German`);
+      }
+      if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)) throw new Error('German layout scrolls sideways');
+      await page.screenshot({ path: SHOT('lang-play') });
+      await page.click('#btn-pause');
+      await page.click('#btn-pause-settings');
+      await choice.scrollIntoViewIfNeeded();
+      await choice.selectOption('auto');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      await page.click('#btn-settings-close');
+      await page.click('#btn-leave');
+      await page.waitForSelector('#screen-title:not([hidden])');
+      await page.unroute(/\/api\/v1\//);
     });
   } finally {
     if (errors.length) {

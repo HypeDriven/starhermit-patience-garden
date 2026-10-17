@@ -1,6 +1,5 @@
 // Patience Garden — strings for the StarHermit account controls (sign-in,
-// invite). Follows the browser language like the Graphics panel.
-import { pickGfxLocale } from './gfx-i18n.js';
+// invite, leaderboard line). main.js picks the table for the game language.
 
 const EN_US = {
   signIn: 'Sign in with StarHermit',
@@ -100,10 +99,4 @@ export const PLATFORM_LOCALES = Object.keys(STRINGS);
 
 export function platformStrings(locale) {
   return STRINGS[locale] || EN_US;
-}
-
-/** Strings for the browser's language. */
-export function currentPlatformStrings() {
-  const langs = typeof navigator !== 'undefined' ? (navigator.languages || [navigator.language]) : [];
-  return platformStrings(pickGfxLocale(langs));
 }

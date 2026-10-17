@@ -7,6 +7,8 @@
 // leaderboard. Without a launch token every call resolves locally and no
 // network request is made.
 
+import { T } from './i18n.js';
+
 const SAVE_DEBOUNCE_MS = 2000;
 
 /** The SDK instance (window.StarHermit; tests may inject one on globalThis). */
@@ -49,9 +51,9 @@ export function inviteLink() { return isHosted() ? sdk().inviteLink() : null; }
 
 /** Display name for a user id: profile nickname, fallback "Player <id>". */
 export async function getNickname(userId) {
-  if (!userId) return 'Player';
+  if (!userId) return T('Player');
   const p = isHosted() ? await sdk().profile(userId) : null;
-  return p ? p.displayName : `Player ${String(userId).slice(0, 6)}`;
+  return p ? p.displayName : T('Player {id}', { id: String(userId).slice(0, 6) });
 }
 
 // --- cloud save (one slot; localStorage stays the offline cache) ----------------
@@ -68,11 +70,18 @@ export async function loadCloudDoc() {
 }
 
 let saveWired = false;
+const conflictListeners = new Set();
 function wireSaveEvents() {
   if (saveWired || !sdk()) return;
   saveWired = true;
   sdk().on('saved', (ok) => setSync(ok ? 'synced' : 'error'));
+  // Every write after the launch load is conditional on the version it saw;
+  // when another device saved first the SDK refuses it and blocks further
+  // writes until the slot is re-read (loadCloudDoc).
+  sdk().on('saveconflict', () => { for (const fn of conflictListeners) fn(); });
 }
+/** fn() when a cloud write lost to a newer save from another device. */
+export function onSaveConflict(fn) { conflictListeners.add(fn); }
 
 /** Debounced cloud mirror of the local save documents. */
 export function queueCloudSave(doc) {

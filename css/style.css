@@ -271,9 +271,9 @@ body.cb-tritanopia .pcard.red { color: #a00050; }
 
 /* ------------------------------ settings ---------------------------------- */
 
-.settings-grid { display: grid; gap: 6px 22px; grid-template-columns: 1fr; }
+.settings-grid { display: grid; gap: 6px 22px; grid-template-columns: minmax(0, 1fr); }
 .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent); }
-.setting label { flex: 1; }
+.setting label { flex: 1; min-width: min-content; } /* wrap at spaces, never mid-word; the control shrinks instead */
 .setting .note { display: block; font-size: 0.75rem; color: var(--text-dim); }
 .setting input[type="range"] { width: 150px; accent-color: var(--accent); }
 .setting select, .setting input[type="checkbox"] { min-height: 32px; accent-color: var(--accent); background: var(--panel-2); color: var(--text); border: 1px solid color-mix(in srgb, var(--text) 20%, transparent); border-radius: 6px; padding: 4px 8px; }
@@ -342,7 +342,9 @@ body.high-contrast .pcard { border: 2px solid #000; }
 
 /* ------------------------- graphics settings ------------------------------ */
 
-.gfx-section { display: grid; grid-template-columns: 1fr; }
+.gfx-section { display: grid; grid-template-columns: minmax(0, 1fr); }
+/* Long option labels (e.g. German) shrink the select instead of widening the panel. */
+.setting select { min-width: 0; max-width: 60%; text-overflow: ellipsis; }
 .gfx-summary { margin: 2px 0 4px; font-size: 0.78rem; color: var(--text-dim); overflow-wrap: anywhere; }
 .gfx-note { margin: 0 0 4px; font-size: 0.8rem; color: var(--accent); }
 .gfx-range { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }

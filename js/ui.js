@@ -4,14 +4,28 @@
 // driven separately by render3d.js through the same session state.
 
 import {
-  RANK_LABELS, SUIT_SYMBOLS, suitOf, rankOf, colorOf, cardName, totalScore,
+  RANK_LABELS, SUIT_SYMBOLS, suitOf, rankOf, colorOf, totalScore,
   foundationCount, hiddenCount,
 } from './rules.js';
-import { THEMES, MODES, BAND_LABELS, PRACTICE_LEVELS, CHALLENGES, LESSONS, JOURNEY, ACHIEVEMENTS } from './content.js';
+import { THEMES, MODES, BAND_LABELS, PROFILES, PRACTICE_LEVELS, CHALLENGES, LESSONS, JOURNEY, ACHIEVEMENTS } from './content.js';
 import { PRESETS, CATEGORIES, presetTier, choosePreset, describe } from './gfx.js';
 import { pickGfxLocale, gfxStrings } from './gfx-i18n.js';
+import { T, N, getLang } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
+
+const SUIT_NAMES = [N('Spades'), N('Hearts'), N('Diamonds'), N('Clubs')];
+const RANK_NAMES = [N('Ace'), N('Two'), N('Three'), N('Four'), N('Five'), N('Six'), N('Seven'),
+  N('Eight'), N('Nine'), N('Ten'), N('Jack'), N('Queen'), N('King')];
+/** Card name in the game language ("Queen of Hearts"). */
+export function cardLabel(card) {
+  return T('{rank} of {suit}', { rank: T(RANK_NAMES[rankOf(card)]), suit: T(SUIT_NAMES[suitOf(card)]) });
+}
+export const suitName = (s) => T(SUIT_NAMES[s]);
+/** Band + profile label, e.g. "Medium Wildwood". */
+export function tableLabel(band, profile) {
+  return T('{band} {profile}', { band: T(BAND_LABELS[band] || band), profile: T(PROFILES[profile]?.label || profile) });
+}
 
 export function fmtTime(ms) {
   const s = Math.floor(ms / 1000);
@@ -125,7 +139,7 @@ export function createUI(handlers) {
 
   function setTitleInfo({ journeyDone, journeyTotal, dailyDone, buildNote }) {
     $('journey-status').textContent = `${journeyDone}/${journeyTotal}`;
-    $('daily-status').textContent = dailyDone ? 'done today ✓' : 'new today';
+    $('daily-status').textContent = dailyDone ? T('done today ✓') : T('new today');
     $('build-note').textContent = buildNote;
   }
 
@@ -163,13 +177,13 @@ export function createUI(handlers) {
       b.className = 'mode-card-btn';
       // Keep the button label exactly the mode name: it is the card's action,
       // and assistive tech / automation match on the full label text.
-      b.innerHTML = `<h3 data-icon="${m.icon}">${m.name}</h3>`;
+      b.innerHTML = `<h3 data-icon="${m.icon}">${T(m.name)}</h3>`;
       b.addEventListener('click', () => handlers.onModeSelect(m.id));
       const info = document.createElement('div');
       info.className = 'mode-card-info';
-      info.innerHTML = `${m.ranked ? '<span class="badge">ranked</span>' : ''}
-        <p>${m.blurb}</p>
-        <span class="meta"><span>1 player</span><span>${m.duration}</span><span>assists: ${m.assists}</span></span>`;
+      info.innerHTML = `${m.ranked ? `<span class="badge">${T('ranked')}</span>` : ''}
+        <p>${T(m.blurb)}</p>
+        <span class="meta"><span>${T('1 player')}</span><span>${T(m.duration)}</span><span>${T('assists: {list}', { list: T(m.assists) })}</span></span>`;
       card.append(b, info);
       host.appendChild(card);
     }
@@ -179,21 +193,24 @@ export function createUI(handlers) {
 
   let setupConfig = null;
 
-  function renderSetup(mode, ctx) {
+  // `keep` (a previous config for the same mode) re-applies the player's pick
+  // when the screen is re-rendered for a language change.
+  function renderSetup(mode, ctx, keep = null) {
     const body = $('setup-body');
     body.innerHTML = '';
     setupConfig = { mode };
     const title = $('setup-heading');
+    if (keep && keep.mode !== mode) keep = null;
 
     if (mode === 'practice') {
-      title.textContent = 'Practice — pick a difficulty';
+      title.textContent = T('Practice — pick a difficulty');
       const grid = document.createElement('div');
       grid.className = 'card-grid';
       for (const level of PRACTICE_LEVELS) {
         const b = document.createElement('button');
         b.className = 'mode-card';
-        b.innerHTML = `<h3>${level.label}</h3><p>${level.text}</p>
-          <span class="meta"><span>unrated</span><span>undo + hints allowed</span></span>`;
+        b.innerHTML = `<h3>${T(level.label)}</h3><p>${T(level.text)}</p>
+          <span class="meta"><span>${T('unrated')}</span><span>${T('undo + hints allowed')}</span></span>`;
         b.addEventListener('click', () => {
           grid.querySelectorAll('.mode-card').forEach((x) => x.classList.remove('completed'));
           b.classList.add('completed');
@@ -202,18 +219,19 @@ export function createUI(handlers) {
         grid.appendChild(b);
       }
       body.appendChild(grid);
-      setupConfig.level = 'easy';
-      grid.children[1].classList.add('completed');
+      const keptLevel = PRACTICE_LEVELS.findIndex((l) => l.id === keep?.level);
+      setupConfig.level = keptLevel >= 0 ? keep.level : 'easy';
+      grid.children[keptLevel >= 0 ? keptLevel : 1].classList.add('completed');
     } else if (mode === 'challenge') {
-      title.textContent = 'Challenges — constrained goals';
+      title.textContent = T('Challenges — constrained goals');
       const grid = document.createElement('div');
       grid.className = 'card-grid';
       for (const ch of CHALLENGES) {
         const done = ctx.challenges?.[ch.id]?.completed;
         const b = document.createElement('button');
         b.className = 'mode-card' + (done ? ' completed' : '');
-        b.innerHTML = `<h3>${done ? '✓ ' : ''}${ch.name}</h3><p>${ch.text}</p>
-          <span class="meta"><span>~${ch.expectedMinutes} min</span>${done ? `<span>best ${ctx.challenges[ch.id].bestScore}</span>` : ''}</span>`;
+        b.innerHTML = `<h3>${done ? '✓ ' : ''}${T(ch.name)}</h3><p>${T(ch.text)}</p>
+          <span class="meta"><span>${T('~{n} min', { n: ch.expectedMinutes })}</span>${done ? `<span>${T('best {score}', { score: ctx.challenges[ch.id].bestScore })}</span>` : ''}</span>`;
         b.addEventListener('click', () => {
           grid.querySelectorAll('.mode-card').forEach((x) => x.classList.remove('completed'));
           b.classList.add('completed');
@@ -222,33 +240,35 @@ export function createUI(handlers) {
         grid.appendChild(b);
       }
       body.appendChild(grid);
-      setupConfig.challengeId = CHALLENGES[0].id;
-      grid.children[0].classList.add('completed');
+      const keptCh = CHALLENGES.findIndex((c) => c.id === keep?.challengeId);
+      setupConfig.challengeId = CHALLENGES[Math.max(0, keptCh)].id;
+      grid.children[Math.max(0, keptCh)].classList.add('completed');
     } else if (mode === 'daily') {
-      title.textContent = `Daily — ${ctx.daily.day}`;
+      title.textContent = T('Daily — {day}', { day: ctx.daily.day });
       body.innerHTML = `<div class="rule-card"><div class="demo">☀</div><div>
-        <h4>One garden, worldwide</h4>
-        <p>Everyone plays the same seed today. Draw 1, unlimited recycles. Undo and hints are allowed but flagged as assists on the board.</p>
-        <p class="mono dim">seed ${ctx.daily.seed.toString(16)} · ruleset v${ctx.daily.version}</p></div></div>
-        <p class="dim">Local board. Next daily in <b id="daily-countdown"></b>.</p>`;
+        <h4>${T('One garden, worldwide')}</h4>
+        <p>${T('Everyone plays the same seed today. Draw 1, unlimited recycles. Undo and hints are allowed but flagged as assists on the board.')}</p>
+        <p class="mono dim">${T('seed {seed} · ruleset v{version}', { seed: ctx.daily.seed.toString(16), version: ctx.daily.version })}</p></div></div>
+        <p class="dim">${T('Local board. Next daily in {time}.', { time: '<b id="daily-countdown"></b>' })}</p>`;
       setupConfig.daily = ctx.daily;
     } else if (mode === 'journey') {
       const s = ctx.stage;
-      title.textContent = `Stage ${s.index + 1} — ${s.title}`;
+      title.textContent = T('Stage {n} — {title}', { n: s.index + 1, title: T(s.title) });
       body.innerHTML = `<div class="rule-card"><div class="demo">${s.mastery ? '❀' : '❧'}</div><div>
-        <h4>${s.title}</h4><p>${s.text}</p>
-        <p class="dim">Par: ${s.par.moves} moves · about ${s.expectedMinutes} min · ${BAND_LABELS[s.band]} ${s.profile}</p></div></div>`;
+        <h4>${T(s.title)}</h4><p>${T(s.text)}</p>
+        <p class="dim">${T('Par: {moves} moves · about {min} min · {table}', { moves: s.par.moves, min: s.expectedMinutes, table: tableLabel(s.band, s.profile) })}</p></div></div>`;
       setupConfig.stage = s.index;
     } else if (mode === 'score') {
-      title.textContent = 'Score Chase — pick a table';
+      title.textContent = T('Score Chase — pick a table');
       const grid = document.createElement('div');
       grid.className = 'card-grid';
       const bands = [['medium', 'wildwood'], ['hard', 'wildwood'], ['easy', 'thicket']];
+      const keptBand = Math.max(0, bands.findIndex(([band, profile]) => band === keep?.scoreBand && profile === keep?.scoreProfile));
       bands.forEach(([band, profile], i) => {
         const b = document.createElement('button');
-        b.className = 'mode-card' + (i === 0 ? ' completed' : '');
-        b.innerHTML = `<h3>${BAND_LABELS[band]} ${profile}</h3>
-          <p>A fixed, validated ${band} seed. Local board; assists flagged.</p>`;
+        b.className = 'mode-card' + (i === keptBand ? ' completed' : '');
+        b.innerHTML = `<h3>${tableLabel(band, profile)}</h3>
+          <p>${T('A fixed, validated seed — difficulty: {band}. Local board; assists flagged.', { band: T(BAND_LABELS[band]) })}</p>`;
         b.addEventListener('click', () => {
           grid.querySelectorAll('.mode-card').forEach((x) => x.classList.remove('completed'));
           b.classList.add('completed');
@@ -258,8 +278,7 @@ export function createUI(handlers) {
         grid.appendChild(b);
       });
       body.appendChild(grid);
-      setupConfig.scoreBand = 'medium';
-      setupConfig.scoreProfile = 'wildwood';
+      [setupConfig.scoreBand, setupConfig.scoreProfile] = bands[keptBand];
     }
     return setupConfig;
   }
@@ -283,8 +302,9 @@ export function createUI(handlers) {
       b.className = 'jnode' + (s.mastery ? ' mastery' : '') + (unlocked(i) ? '' : ' locked') + (!rec && unlocked(i) ? ' current' : '');
       b.disabled = !unlocked(i);
       b.setAttribute('role', 'listitem');
-      b.title = `${s.title} — ${BAND_LABELS[s.band]}`;
-      b.setAttribute('aria-label', `Stage ${i + 1}: ${s.title}. ${rec ? `${rec.stars} stars.` : unlocked(i) ? 'Unlocked.' : 'Locked.'}`);
+      b.title = `${T(s.title)} — ${T(BAND_LABELS[s.band])}`;
+      const status = rec ? T('{n} stars.', { n: rec.stars }) : unlocked(i) ? T('Unlocked.') : T('Locked.');
+      b.setAttribute('aria-label', T('Stage {n}: {title}. {status}', { n: i + 1, title: T(s.title), status }));
       b.innerHTML = `${i + 1}${rec ? `<span class="stars">${'★'.repeat(rec.stars)}${'☆'.repeat(3 - rec.stars)}</span>` : ''}`;
       b.addEventListener('click', () => handlers.onJourneyPick(i));
       host.appendChild(b);
@@ -298,7 +318,7 @@ export function createUI(handlers) {
       const done = progress.lessons[l.id];
       const b = document.createElement('button');
       b.className = 'mode-card' + (done ? ' completed' : '');
-      b.innerHTML = `<h3>${done ? '✓ ' : ''}${l.title}</h3><p>${l.steps.length} guided steps</p>`;
+      b.innerHTML = `<h3>${done ? '✓ ' : ''}${T(l.title)}</h3><p>${T('{n} guided steps', { n: l.steps.length })}</p>`;
       b.addEventListener('click', () => handlers.onLessonPick(l.id));
       host.appendChild(b);
     }
@@ -314,13 +334,13 @@ export function createUI(handlers) {
     if (s.goal !== undefined) $('hud-goal').textContent = s.goal;
     if (s.objective !== undefined) $('rail-objective').textContent = s.objective;
     if (s.constraint !== undefined) $('rail-constraint').textContent = s.constraint;
-    if (s.seed !== undefined) $('rail-seed').textContent = `seed ${s.seed}`;
+    if (s.seed !== undefined) $('rail-seed').textContent = T('seed {seed}', { seed: s.seed });
     if (s.streak !== undefined) $('rail-streak').textContent = s.streak;
     if (s.assists !== undefined) $('rail-assists').textContent = s.assists;
     if (s.foundations) {
       const host = $('rail-progress');
       host.innerHTML = s.foundations.map((f, i) =>
-        `<div class="pring" style="--p:${f / 13}" title="${['Spades', 'Hearts', 'Diamonds', 'Clubs'][i]}: ${f}/13"><span>${SUIT_SYMBOLS[i]}</span></div>`).join('');
+        `<div class="pring" style="--p:${f / 13}" title="${suitName(i)}: ${f}/13"><span>${SUIT_SYMBOLS[i]}</span></div>`).join('');
     }
   }
 
@@ -347,12 +367,10 @@ export function createUI(handlers) {
     stock.dataset.zone = 'stock';
     stock.setAttribute('role', 'button');
     stock.setAttribute('tabindex', '0');
-    stock.setAttribute('aria-label', 'Stock');
     stock.innerHTML = '<span class="pile-label">⟳</span>';
     const waste = document.createElement('div');
     waste.className = 'pile-slot waste';
     waste.dataset.zone = 'waste';
-    waste.setAttribute('aria-label', 'Waste');
     top.append(stock, waste);
     const spacer = document.createElement('div');
     spacer.style.width = 'calc(var(--card-w) * 0.8)';
@@ -365,7 +383,6 @@ export function createUI(handlers) {
       f.dataset.pile = s;
       f.setAttribute('role', 'button');
       f.setAttribute('tabindex', '0');
-      f.setAttribute('aria-label', `Foundation ${['Spades', 'Hearts', 'Diamonds', 'Clubs'][s]}`);
       f.innerHTML = `<span class="pile-label">${SUIT_SYMBOLS[s]}</span>`;
       top.appendChild(f);
       pileEls.foundations.push(f);
@@ -380,7 +397,6 @@ export function createUI(handlers) {
       t.dataset.pile = p;
       t.setAttribute('role', 'button');
       t.setAttribute('tabindex', '0');
-      t.setAttribute('aria-label', `Row ${p + 1}`);
       tab.appendChild(t);
       pileEls.tableau.push(t);
     }
@@ -388,6 +404,7 @@ export function createUI(handlers) {
     pileEls.stock = stock;
     pileEls.waste = waste;
     boardBuilt = true;
+    labelPiles();
 
     host.addEventListener('click', (e) => {
       const card = e.target.closest('.pcard');
@@ -412,6 +429,15 @@ export function createUI(handlers) {
     });
   }
 
+  /** Fixed pile labels (re-applied when the language changes). */
+  function labelPiles() {
+    if (!boardBuilt) return;
+    pileEls.stock.setAttribute('aria-label', T('Stock'));
+    pileEls.waste.setAttribute('aria-label', T('Waste'));
+    pileEls.foundations.forEach((f, s) => f.setAttribute('aria-label', T('Foundation {suit}', { suit: suitName(s) })));
+    pileEls.tableau.forEach((t, p) => t.setAttribute('aria-label', T('Row {n}', { n: p + 1 })));
+  }
+
   function sizeBoard2D() {
     const r = els.boardRegion.getBoundingClientRect();
     // the 96px cap grows with the large-screen UI scale (1 at ≤1600×1000)
@@ -432,9 +458,9 @@ export function createUI(handlers) {
       b.innerHTML = `<span class="corner">${r}<small class="suitmark">${s}</small></span>
         <span class="center suitmark">${s}</span>
         <span class="corner br">${r}<small class="suitmark">${s}</small></span>`;
-      b.setAttribute('aria-label', cardName(card));
+      b.setAttribute('aria-label', cardLabel(card));
     } else {
-      b.setAttribute('aria-label', 'Face-down card');
+      b.setAttribute('aria-label', T('Face-down card'));
       b.tabIndex = -1;
     }
     return b;
@@ -458,9 +484,9 @@ export function createUI(handlers) {
       const c = cardEl(state.stock[state.stock.length - 1], 'stock', 0, state.stock.length - 1, false, 0);
       c.tabIndex = -1;
       pileEls.stock.appendChild(c);
-      pileEls.stock.setAttribute('aria-label', `Stock, ${state.stock.length} cards. Activate to draw.`);
+      pileEls.stock.setAttribute('aria-label', T('Stock, {n} cards. Activate to draw.', { n: state.stock.length }));
     } else {
-      pileEls.stock.setAttribute('aria-label', state.waste.length ? 'Stock empty. Activate to recycle the waste.' : 'Stock empty.');
+      pileEls.stock.setAttribute('aria-label', state.waste.length ? T('Stock empty. Activate to recycle the waste.') : T('Stock empty.'));
     }
 
     // waste (fan up to 3)
@@ -495,8 +521,8 @@ export function createUI(handlers) {
       pileEls.tableau[p].style.minHeight = `${Math.max(cw * 1.4, y + cw * 1.4)}px`;
       const topCard = pile[pile.length - 1];
       pileEls.tableau[p].setAttribute('aria-label',
-        pile.length === 0 ? `Row ${p + 1}, empty` :
-          `Row ${p + 1}, ${pile.length} cards, top ${topCard.up ? cardName(topCard.c) : 'face down'}`);
+        pile.length === 0 ? T('Row {n}, empty', { n: p + 1 }) :
+          T('Row {n}, {count} cards, top {card}', { n: p + 1, count: pile.length, card: topCard.up ? cardLabel(topCard.c) : T('face down') }));
     });
 
     // selection / targets / hint
@@ -522,76 +548,97 @@ export function createUI(handlers) {
 
   // ---- results ------------------------------------------------------------------
 
-  function renderResults(r) {
+  function renderResults(r, { reopen = true } = {}) {
     $('results-heading').textContent = r.headline;
     $('results-sub').textContent = r.sub;
     $('results-stars').textContent = r.stars ? '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars) : '';
     const tbl = $('results-table');
     tbl.innerHTML = r.breakdown.rows
       .filter(([, v]) => v !== 0)
-      .map(([label, v]) => `<tr><td>${label}</td><td>${v > 0 ? '+' : ''}${v}</td></tr>`)
+      .map(([label, v]) => `<tr><td>${T(label)}</td><td>${v > 0 ? '+' : ''}${v}</td></tr>`)
       .join('') +
-      `<tr><td>Moves</td><td>${r.breakdown.moves}</td></tr>
-       <tr><td>Time</td><td>${fmtTime(r.breakdown.ms)}</td></tr>
-       <tr><td>Assists</td><td>${r.breakdown.undos} undo · ${r.breakdown.hints} hint · ${r.breakdown.invalids} invalid</td></tr>
-       <tr class="total"><td>Total score</td><td>${r.breakdown.total}</td></tr>`;
+      `<tr><td>${T('Moves')}</td><td>${r.breakdown.moves}</td></tr>
+       <tr><td>${T('Time')}</td><td>${fmtTime(r.breakdown.ms)}</td></tr>
+       <tr><td>${T('Assists')}</td><td>${T('{undos} undo · {hints} hint · {invalids} invalid', { undos: r.breakdown.undos, hints: r.breakdown.hints, invalids: r.breakdown.invalids })}</td></tr>
+       <tr class="total"><td>${T('Total score')}</td><td>${r.breakdown.total}</td></tr>`;
     $('results-progress').textContent = r.progressNote || '';
     const ach = $('results-achievements');
-    ach.innerHTML = (r.achievements || []).map((a) => `<span class="ach-pop">❀ ${a.name} unlocked</span>`).join('');
-    $('btn-results-next').textContent = r.nextLabel || 'Next →';
+    ach.innerHTML = (r.achievements || []).map((a) => `<span class="ach-pop">❀ ${T('{name} unlocked', { name: T(a.name) })}</span>`).join('');
+    $('btn-results-next').textContent = r.nextLabel || T('Next →');
     $('btn-results-next').style.display = r.nextLabel ? '' : 'none';
-    openOverlay('results');
+    if (reopen) openOverlay('results');
   }
 
   // ---- settings -----------------------------------------------------------------
 
+  // Labels are English keys, translated at render time.
   const SETTINGS_SCHEMA = [
-    { section: 'Gameplay' },
-    { key: 'interfaceMode', label: 'Interface', type: 'select', options: [['3d', '3D glasshouse'], ['2d', '2D cards']], note: '2D is fully playable and works without WebGL.' },
-    { key: 'theme', label: 'Theme', type: 'select', options: THEMES.map((t) => [t.id, t.name]) },
+    { section: N('Gameplay') },
+    { key: 'interfaceMode', label: N('Interface'), type: 'select', options: [['3d', N('3D glasshouse')], ['2d', N('2D cards')]], note: N('2D is fully playable and works without WebGL.') },
+    { key: 'theme', label: N('Theme'), type: 'select', options: THEMES.map((t) => [t.id, t.name]) },
     { graphics: true },
-    { section: 'Audio' },
-    { key: 'volumes.music', label: 'Music', type: 'range' },
-    { key: 'volumes.effects', label: 'Effects', type: 'range' },
-    { key: 'volumes.ambience', label: 'Ambience', type: 'range' },
-    { key: 'muted', label: 'Mute all', type: 'check' },
-    { section: 'Accessibility' },
-    { key: 'reducedMotion', label: 'Reduced motion', type: 'check', note: 'Removes camera drift, shake and particles; timing unchanged.' },
-    { key: 'highContrast', label: 'High contrast', type: 'check' },
-    { key: 'largeText', label: 'Larger text', type: 'check' },
-    { key: 'colorblindPalette', label: 'Colour-vision palette', type: 'select', options: [['default', 'Default'], ['deuteranopia', 'Deuteranopia'], ['protanopia', 'Protanopia'], ['tritanopia', 'Tritanopia']], note: 'Suits are always labelled with symbols as well as colour.' },
-    { key: 'leftHanded', label: 'Left-handed controls', type: 'check' },
-    { key: 'timingAssist', label: 'Timing assistance', type: 'check', note: 'Adds a grace buffer to timed challenges.' },
-    { key: 'haptics', label: 'Haptics', type: 'check' },
-    { key: 'cameraDrift', label: 'Camera idle drift', type: 'check' },
+    { section: N('Audio') },
+    { key: 'volumes.music', label: N('Music'), type: 'range' },
+    { key: 'volumes.effects', label: N('Effects'), type: 'range' },
+    { key: 'volumes.ambience', label: N('Ambience'), type: 'range' },
+    { key: 'muted', label: N('Mute all'), type: 'check' },
+    { section: N('Accessibility') },
+    { key: 'reducedMotion', label: N('Reduced motion'), type: 'check', note: N('Removes camera drift, shake and particles; timing unchanged.') },
+    { key: 'highContrast', label: N('High contrast'), type: 'check' },
+    { key: 'largeText', label: N('Larger text'), type: 'check' },
+    { key: 'colorblindPalette', label: N('Color-vision palette'), type: 'select', options: [['default', N('Default')], ['deuteranopia', N('Deuteranopia')], ['protanopia', N('Protanopia')], ['tritanopia', N('Tritanopia')]], note: N('Suits are always labeled with symbols as well as color.') },
+    { key: 'leftHanded', label: N('Left-handed controls'), type: 'check' },
+    { key: 'timingAssist', label: N('Timing assistance'), type: 'check', note: N('Adds a grace buffer to timed challenges.') },
+    { key: 'haptics', label: N('Haptics'), type: 'check' },
+    { key: 'cameraDrift', label: N('Camera idle drift'), type: 'check' },
   ];
+  // The Graphics host stays the same element across re-renders: the shared
+  // game-options.js sections (frame rate, language, sound, report) live in it,
+  // after the game's own #gfx-box.
+  let gfxHost = null;
+  let lastSettings = null;
 
   function renderSettings(settings) {
+    lastSettings = settings;
     const host = $('settings-body');
-    host.innerHTML = '';
+    // Clear everything but the Graphics host (removing it would drop focus
+    // and the shared sections inside it); rows are re-inserted around it.
+    for (const child of [...host.children]) if (child !== gfxHost) child.remove();
+    let graphicsPlaced = false;
+    const place = (node) => {
+      if (graphicsPlaced || !gfxHost || !gfxHost.isConnected) host.appendChild(node);
+      else host.insertBefore(node, gfxHost);
+    };
     for (const item of SETTINGS_SCHEMA) {
       if (item.graphics) {
-        const g = document.createElement('div');
-        g.id = 'gfx-section';
-        g.className = 'gfx-section';
-        host.appendChild(g);
+        if (!gfxHost) {
+          gfxHost = document.createElement('div');
+          gfxHost.id = 'gfx-section';
+          gfxHost.className = 'gfx-section';
+          gfxHost.dataset.optionsGraphics = '';
+          const box = document.createElement('div');
+          box.id = 'gfx-box';
+          gfxHost.appendChild(box);
+        }
+        if (!gfxHost.isConnected) host.appendChild(gfxHost);
+        graphicsPlaced = true;
         if (lastGfx) renderGraphics(...lastGfx);
         continue;
       }
       if (item.section) {
         const h = document.createElement('h3');
         h.className = 'settings-section';
-        h.textContent = item.section;
-        host.appendChild(h);
+        h.textContent = T(item.section);
+        place(h);
         continue;
       }
       const row = document.createElement('div');
       row.className = 'setting';
       const value = item.key.split('.').reduce((o, k) => o?.[k], settings);
-      const label = `<label for="set-${item.key}">${item.label}${item.note ? `<span class="note">${item.note}</span>` : ''}</label>`;
+      const label = `<label for="set-${item.key}">${T(item.label)}${item.note ? `<span class="note">${T(item.note)}</span>` : ''}</label>`;
       let control;
       if (item.type === 'select') {
-        control = `<select id="set-${item.key}">${item.options.map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+        control = `<select id="set-${item.key}">${item.options.map(([v, l]) => `<option value="${v}" ${v === value ? 'selected' : ''}>${T(l)}</option>`).join('')}</select>`;
       } else if (item.type === 'range') {
         control = `<input type="range" id="set-${item.key}" min="0" max="1" step="0.05" value="${value}">`;
       } else {
@@ -603,7 +650,7 @@ export function createUI(handlers) {
         const v = input.type === 'checkbox' ? input.checked : input.type === 'range' ? +input.value : input.value;
         handlers.onSettingsChange(item.key, v);
       });
-      host.appendChild(row);
+      place(row);
     }
   }
 
@@ -612,8 +659,8 @@ export function createUI(handlers) {
   // resolution, frame-rate readout and a "GPU · cost · pixels" summary. Every
   // change is handed to handlers.onGraphicsChange(newGraphicsObject).
 
-  const gfxLocale = pickGfxLocale(typeof navigator !== 'undefined' ? (navigator.languages || [navigator.language]) : []);
-  const GT = gfxStrings(gfxLocale);
+  // Graphics strings live in gfx-i18n.js and follow the game language.
+  let GT = gfxStrings(pickGfxLocale([getLang()]));
   let lastGfx = null;
 
   function gfxSummaryText(info) {
@@ -633,7 +680,8 @@ export function createUI(handlers) {
 
   function renderGraphics(saved, info) {
     lastGfx = [saved, info];
-    const host = $('gfx-section');
+    GT = gfxStrings(pickGfxLocale([getLang()]));
+    const host = $('gfx-box');
     if (!host) return;
     const focusId = host.contains(document.activeElement) ? document.activeElement.id : null;
     const g = { preset: 'auto', render_scale: 1, adaptive: true, show_fps: false, ...(saved || {}) };
@@ -688,7 +736,7 @@ export function createUI(handlers) {
   // ---- help ----------------------------------------------------------------------
 
   function keyLabel(code) {
-    const named = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc', Space: 'Space', NumpadEnter: 'Num Enter' };
+    const named = { ArrowLeft: '←', ArrowRight: '→', ArrowUp: '↑', ArrowDown: '↓', Escape: 'Esc', Space: T('Space'), NumpadEnter: T('Num Enter') };
     if (named[code]) return named[code];
     if (/^Key[A-Z]$/.test(code)) return code.slice(3);
     if (/^Digit\d$/.test(code)) return code.slice(5);
@@ -696,48 +744,56 @@ export function createUI(handlers) {
   }
   const kbds = (codes) => (codes || []).map((c) => `<kbd>${keyLabel(c)}</kbd>`).join('/');
 
+  let lastBindings = {};
   function renderHelp(b = {}) {
+    lastBindings = b;
     const k = (action, fallback) => (b[action] && b[action].length ? kbds(b[action]) : fallback);
+    const card = (demo, h, p) => `<div class="rule-card"><div class="demo">${demo}</div><div><h4>${h}</h4><p>${p}</p></div></div>`;
     $('help-body').innerHTML = `
-      <p>Build four <b>foundations</b> from Ace to King, one suit each. On the <b>tableau</b>, build <b>down</b> in <b>alternating colours</b>. Uncover every hidden card.</p>
-      <div class="rule-card"><div class="demo">🂿</div><div><h4>Stock &amp; waste</h4><p>Activate the stock (${k('draw', '<kbd>D</kbd>')} or tap) to draw. When it runs out, tap again to recycle the waste — recycling costs points.</p></div></div>
-      <div class="rule-card"><div class="demo"><span style="color:#b03a2e">8♥</span>→<span>9♠</span></div><div><h4>Alternating runs</h4><p>Place a card on a tableau card one rank higher and of the opposite colour. Face-up runs move together.</p></div></div>
-      <div class="rule-card"><div class="demo">K♣</div><div><h4>Empty rows</h4><p>Only a King may move to an empty tableau row.</p></div></div>
-      <div class="rule-card"><div class="demo">A♥→❀</div><div><h4>Foundations</h4><p>Bank Aces first, then upward by suit. Double-tap a card to send it to its foundation. Banking early is usually safe.</p></div></div>
-      <div class="rule-card"><div class="demo">❀</div><div><h4>Auto-finish</h4><p>When nothing is hidden and the stock is empty, Auto-finish (${k('autofinish', '<kbd>A</kbd>')}) banks everything for you.</p></div></div>
-      <h3>Controls</h3>
-      <div class="rule-card"><div class="demo">⌨</div><div><h4>Keyboard</h4><p>${k('focus_left', '←')} ${k('focus_right', '→')} ${k('focus_up', '↑')} ${k('focus_down', '↓')} move focus between piles · ${k('select', '<kbd>Enter</kbd>')} select or place · ${k('draw', '<kbd>D</kbd>')} draw · ${k('undo', '<kbd>U</kbd>')} undo · ${k('hint', '<kbd>H</kbd>')} hint · ${k('autofinish', '<kbd>A</kbd>')} auto-finish · ${k('pause', '<kbd>Esc</kbd>')} pause.</p></div></div>
-      <div class="rule-card"><div class="demo">🎮</div><div><h4>Gamepad</h4><p>D-pad or left stick moves focus · A selects or places · B cancels or pauses · X undo · Y hint · Start pauses.</p></div></div>
-      <div class="rule-card"><div class="demo">👆</div><div><h4>Pointer &amp; touch</h4><p>Tap a card to select, tap a target to place — or drag runs directly. Double-tap banks to a foundation. Tap the stock to draw.</p></div></div>
-      <div class="rule-card"><div class="demo">✦</div><div><h4>Assists</h4><p>Undo and Hint are always available in Practice and Journey. Assisted runs are flagged on the board.</p></div></div>`;
+      <p>${T('Build four <b>foundations</b> from Ace to King, one suit each. On the <b>tableau</b>, build <b>down</b> in <b>alternating colors</b>. Uncover every hidden card.')}</p>
+      ${card('🂿', T('Stock &amp; waste'), T('Activate the stock ({key} or tap) to draw. When it runs out, tap again to recycle the waste — recycling costs points.', { key: k('draw', '<kbd>D</kbd>') }))}
+      ${card('<span style="color:#b03a2e">8♥</span>→<span>9♠</span>', T('Alternating runs'), T('Place a card on a tableau card one rank higher and of the opposite color. Face-up runs move together.'))}
+      ${card('K♣', T('Empty rows'), T('Only a King may move to an empty tableau row.'))}
+      ${card('A♥→❀', T('Foundations'), T('Bank Aces first, then upward by suit. Double-tap a card to send it to its foundation. Banking early is usually safe.'))}
+      ${card('❀', T('Auto-finish'), T('When nothing is hidden and the stock is empty, Auto-finish ({key}) banks everything for you.', { key: k('autofinish', '<kbd>A</kbd>') }))}
+      <h3>${T('Controls')}</h3>
+      ${card('⌨', T('Keyboard'), T('{left} {right} {up} {down} move focus between piles · {select} select or place · {draw} draw · {undo} undo · {hint} hint · {finish} auto-finish · {pause} pause.', {
+        left: k('focus_left', '←'), right: k('focus_right', '→'), up: k('focus_up', '↑'), down: k('focus_down', '↓'),
+        select: k('select', '<kbd>Enter</kbd>'), draw: k('draw', '<kbd>D</kbd>'), undo: k('undo', '<kbd>U</kbd>'),
+        hint: k('hint', '<kbd>H</kbd>'), finish: k('autofinish', '<kbd>A</kbd>'), pause: k('pause', '<kbd>Esc</kbd>'),
+      }))}
+      ${card('🎮', T('Gamepad'), T('D-pad or left stick moves focus · A selects or places · B cancels or pauses · X undo · Y hint · Start pauses.'))}
+      ${card('👆', T('Pointer &amp; touch'), T('Tap a card to select, tap a target to place — or drag runs directly. Double-tap banks to a foundation. Tap the stock to draw.'))}
+      ${card('✦', T('Assists'), T('Undo and Hint are always available in Practice and Journey. Assisted runs are flagged on the board.'))}`;
   }
 
   // ---- profile / scores -------------------------------------------------------------
 
   function renderProfile(stats, achievements, progress, playerName = null) {
     const lessonsDone = Object.keys(progress.lessons).length;
+    const row = (label, v) => `<tr><td>${T(label)}</td><td>${v}</td></tr>`;
     $('profile-body').innerHTML = `
-      <h3 id="profile-player-h" hidden>Gardener</h3>
+      <h3 id="profile-player-h" hidden>${T('Gardener')}</h3>
       <p id="profile-player" hidden></p>
-      <h3>Career</h3>
+      <h3>${T('Career')}</h3>
       <table class="score-table">
-        <tr><td>Games played</td><td>${stats.games}</td></tr>
-        <tr><td>Wins</td><td>${stats.wins}</td></tr>
-        <tr><td>Losses</td><td>${stats.losses}</td></tr>
-        <tr><td>Best streak</td><td>${stats.bestStreak}</td></tr>
-        <tr><td>Current streak</td><td>${stats.streak}</td></tr>
-        <tr><td>Cards banked</td><td>${stats.foundationsBanked}</td></tr>
-        <tr><td>Best score</td><td>${stats.bestScore}</td></tr>
-        <tr><td>Fastest win</td><td>${stats.bestWinMs == null ? '—' : fmtTime(stats.bestWinMs)}</td></tr>
-        <tr><td>Dailies completed</td><td>${stats.dailyCompleted}</td></tr>
-        <tr><td>Lessons completed</td><td>${lessonsDone}/${LESSONS.length}</td></tr>
-        <tr><td>Journey stages</td><td>${Object.keys(progress.journey).length}/${JOURNEY.length}</td></tr>
+        ${row(N('Games played'), stats.games)}
+        ${row(N('Wins'), stats.wins)}
+        ${row(N('Losses'), stats.losses)}
+        ${row(N('Best streak'), stats.bestStreak)}
+        ${row(N('Current streak'), stats.streak)}
+        ${row(N('Cards banked'), stats.foundationsBanked)}
+        ${row(N('Best score'), stats.bestScore)}
+        ${row(N('Fastest win'), stats.bestWinMs == null ? '—' : fmtTime(stats.bestWinMs))}
+        ${row(N('Dailies completed'), stats.dailyCompleted)}
+        ${row(N('Lessons completed'), `${lessonsDone}/${LESSONS.length}`)}
+        ${row(N('Journey stages'), `${Object.keys(progress.journey).length}/${JOURNEY.length}`)}
       </table>
-      <h3>Achievements</h3>
+      <h3>${T('Achievements')}</h3>
       ${ACHIEVEMENTS.map((a) => {
         const un = achievements.unlocked[a.key];
         return `<div class="rule-card"><div class="demo">${un ? '❀' : '·'}</div><div>
-          <h4>${a.name} ${un ? '<span class="dim">✓</span>' : ''}</h4><p>${a.text}</p></div></div>`;
+          <h4>${T(a.name)} ${un ? '<span class="dim">✓</span>' : ''}</h4><p>${T(a.text)}</p></div></div>`;
       }).join('')}`;
     const head = $('profile-player-h');
     const line = $('profile-player');
@@ -751,23 +807,27 @@ export function createUI(handlers) {
   function renderScores(entries, globalBoards = null) {
     const host = $('scores-body');
     if (!entries.length && !globalBoards) {
-      host.innerHTML = '<p class="dim">No results yet. Play the Daily or a Score Chase table.</p>';
+      host.innerHTML = `<p class="dim">${T('No results yet. Play the Daily or a Score Chase table.')}</p>`;
       return;
     }
+    const MODE_NAMES = { daily: N('Daily'), score: N('Score Chase') };
     const byMode = {};
     for (const e of entries) (byMode[e.mode] ||= []).push(e);
-    let html = Object.entries(byMode).map(([mode, list]) => `
-      <h3>${globalBoards ? `${mode} — local` : mode}</h3>
+    let html = Object.entries(byMode).map(([mode, list]) => {
+      const name = T(MODE_NAMES[mode] || mode);
+      return `
+      <h3>${globalBoards ? T('{mode} — local', { mode: name }) : name}</h3>
       <table class="score-table">
-        ${list.slice(0, 10).map((e, i) => `<tr><td>${i + 1}. ${e.score} pts</td><td class="dim">${e.moves} moves · ${fmtTime(e.ms)}${e.assists ? ' · assists' : ''}</td></tr>`).join('')}
-      </table>`).join('');
+        ${list.slice(0, 10).map((e, i) => `<tr><td>${i + 1}. ${T('{n} pts', { n: e.score })}</td><td class="dim">${T('{n} moves', { n: e.moves })} · ${fmtTime(e.ms)}${e.assists ? ` · ${T('assists')}` : ''}</td></tr>`).join('')}
+      </table>`;
+    }).join('');
     if (globalBoards) {
       for (const board of globalBoards) {
-        html += `<h3>${board.title}</h3>`;
-        if (!board.rows.length) html += '<p class="dim">No entries yet.</p>';
+        html += `<h3>${T(board.title)}</h3>`;
+        if (!board.rows.length) html += `<p class="dim">${T('No entries yet.')}</p>`;
         else {
           html += `<table class="score-table">
-            ${board.rows.map((r) => `<tr><td>${r.rank}. <span class="board-name"></span> — ${r.score} pts</td><td class="dim">${r.detail || ''}</td></tr>`).join('')}
+            ${board.rows.map((r) => `<tr><td>${r.rank}. <span class="board-name"></span> — ${T('{n} pts', { n: r.score })}</td><td class="dim">${r.detail || ''}</td></tr>`).join('')}
           </table>`;
         }
       }
@@ -804,8 +864,16 @@ export function createUI(handlers) {
     el.textContent = text;
   }
 
+  /** Re-render the UI layer's own text after a language change (main.js re-renders the rest). */
+  function refreshLanguage() {
+    if (lastSettings) renderSettings(lastSettings);
+    else if (lastGfx) renderGraphics(...lastGfx);
+    renderHelp(lastBindings);
+    labelPiles();
+  }
+
   return {
-    els, showScreen, currentScreen, openOverlay, closeOverlay, toast, hideToast, announce, coach,
+    els, showScreen, refreshLanguage, currentScreen, openOverlay, closeOverlay, toast, hideToast, announce, coach,
     setTitleInfo, setPlayerInfo, setAccountButtons, setAccountLabels, onAccountAction, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
     renderJourney, renderLessons, updateHUD, setActions,
     buildBoard, renderBoard2D, sizeBoard2D, setBoard2DVisible,

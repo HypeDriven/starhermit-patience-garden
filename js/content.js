@@ -84,7 +84,7 @@ const JOURNEY_PLAN = [
   { t: 'First Sprouts',      p: 'sprout', b: 'gentle', i: 0, mech: ['draw', 'foundation'], faceUp: true,
     text: 'All cards face up. Learn the rhythm: draw, place, bank.' },
   { t: 'Sunlit Rows',        p: 'sprout', b: 'gentle', i: 1, mech: ['tableau'], faceUp: true,
-    text: 'Build descending runs in alternating colours.' },
+    text: 'Build descending runs in alternating colors.' },
   { t: 'Hidden Depths',      p: 'sprout', b: 'gentle', i: 2, mech: ['reveal'],
     text: 'Face-down cards appear. Uncover them by moving what covers them.' },
   { t: 'Empty Soil',         p: 'sprout', b: 'gentle', i: 3, mech: ['kings'],
@@ -106,7 +106,7 @@ const JOURNEY_PLAN = [
   { t: 'Fourth Suit',        p: 'thicket', b: 'easy',  i: 0, mech: ['four-suits'],
     text: 'Clubs join the garden — four suits, four foundations.' },
   { t: 'Bramble Paths',      p: 'thicket', b: 'easy',  i: 1, mech: [],
-    text: 'More suits, more choices. Watch both colours.' },
+    text: 'More suits, more choices. Watch both colors.' },
   { t: 'Seedling Rows',      p: 'thicket', b: 'easy',  i: 2, mech: [],
     text: 'Short rows reward tidy play.' },
   { t: 'Undergrowth',        p: 'thicket', b: 'medium', i: 2, mech: [],
@@ -335,7 +335,7 @@ export const LESSONS = [
     ],
   },
   {
-    id: 'learn-tableau', title: 'Alternating Colours',
+    id: 'learn-tableau', title: 'Alternating Colors',
     theme: 'verdant-canopy',
     ruleset: {},
     layout: {
@@ -349,7 +349,7 @@ export const LESSONS = [
       ],
     },
     steps: [
-      { id: 't1', text: 'Tableau rows build DOWN in alternating colours. Move the black 8 of Spades onto the red 9 of Hearts.', expect: { type: 'move', fromZone: 'tableau', fromPile: 1, toZone: 'tableau', toPile: 0 } },
+      { id: 't1', text: 'Tableau rows build DOWN in alternating colors. Move the black 8 of Spades onto the red 9 of Hearts.', expect: { type: 'move', fromZone: 'tableau', fromPile: 1, toZone: 'tableau', toPile: 0 } },
       { id: 't2', text: 'Now the red 7 of Diamonds can continue the run onto the 8 of Spades.', expect: { type: 'move', fromZone: 'tableau', fromPile: 2, toZone: 'tableau', toPile: 0 } },
     ],
   },
