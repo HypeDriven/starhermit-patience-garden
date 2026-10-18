@@ -13,7 +13,7 @@ const EN = {
   showFps: 'Show frame rate',
   postFailed: 'Post-processing is unavailable on this device; the table renders without it.',
   noRenderer: 'Graphics apply to the 3D glasshouse table.',
-  unknownGpu: 'unknown GPU',
+  unknownGpu: 'unknown GPU', level: 'Level {n}',
   presets: { low: 'Low', balanced: 'Balanced', high: 'High', ultra: 'Ultra' },
   cats: {
     shadows: 'Shadows', ao: 'Ambient occlusion', bloom: 'Bloom', grade: 'Colour grade',
@@ -39,7 +39,7 @@ const ES = {
   showFps: 'Mostrar fotogramas por segundo',
   postFailed: 'El posprocesado no está disponible en este dispositivo; la mesa se muestra sin él.',
   noRenderer: 'Los gráficos se aplican a la mesa 3D del invernadero.',
-  unknownGpu: 'GPU desconocida',
+  unknownGpu: 'GPU desconocida', level: 'Nivel {n}',
   presets: { low: 'Baja', balanced: 'Equilibrada', high: 'Alta', ultra: 'Ultra' },
   cats: {
     shadows: 'Sombras', ao: 'Oclusión ambiental', bloom: 'Resplandor', grade: 'Corrección de color',
@@ -65,7 +65,7 @@ const FR = {
   showFps: 'Afficher les images par seconde',
   postFailed: 'Le post-traitement est indisponible sur cet appareil ; la table s’affiche sans.',
   noRenderer: 'Les graphismes s’appliquent à la table 3D de la serre.',
-  unknownGpu: 'GPU inconnu',
+  unknownGpu: 'GPU inconnu', level: 'Niveau {n}',
   presets: { low: 'Basse', balanced: 'Équilibrée', high: 'Haute', ultra: 'Ultra' },
   cats: {
     shadows: 'Ombres', ao: 'Occlusion ambiante', bloom: 'Halo lumineux', grade: 'Étalonnage des couleurs',
@@ -96,7 +96,7 @@ const STRINGS = {
     showFps: 'Bildrate anzeigen',
     postFailed: 'Nachbearbeitung ist auf diesem Gerät nicht verfügbar; der Tisch wird ohne sie dargestellt.',
     noRenderer: 'Die Grafik gilt für den 3D-Gewächshaustisch.',
-    unknownGpu: 'unbekannte GPU',
+    unknownGpu: 'unbekannte GPU', level: 'Stufe {n}',
     presets: { low: 'Niedrig', balanced: 'Ausgewogen', high: 'Hoch', ultra: 'Ultra' },
     cats: {
       shadows: 'Schatten', ao: 'Umgebungsverdeckung', bloom: 'Leuchteffekt', grade: 'Farbkorrektur',
@@ -123,7 +123,7 @@ const STRINGS = {
     showFps: 'Mostrar taxa de quadros',
     postFailed: 'O pós-processamento não está disponível neste dispositivo; a mesa é exibida sem ele.',
     noRenderer: 'Os gráficos se aplicam à mesa 3D da estufa.',
-    unknownGpu: 'GPU desconhecida',
+    unknownGpu: 'GPU desconhecida', level: 'Nível {n}',
     presets: { low: 'Baixa', balanced: 'Equilibrada', high: 'Alta', ultra: 'Ultra' },
     cats: {
       shadows: 'Sombras', ao: 'Oclusão ambiente', bloom: 'Brilho', grade: 'Correção de cor',
@@ -148,7 +148,7 @@ const STRINGS = {
     showFps: 'Mostra frequenza fotogrammi',
     postFailed: 'La post-elaborazione non è disponibile su questo dispositivo; il tavolo viene mostrato senza.',
     noRenderer: 'La grafica si applica al tavolo 3D della serra.',
-    unknownGpu: 'GPU sconosciuta',
+    unknownGpu: 'GPU sconosciuta', level: 'Livello {n}',
     presets: { low: 'Bassa', balanced: 'Bilanciata', high: 'Alta', ultra: 'Ultra' },
     cats: {
       shadows: 'Ombre', ao: 'Occlusione ambientale', bloom: 'Bagliore', grade: 'Correzione colore',

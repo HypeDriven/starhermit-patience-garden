@@ -21,7 +21,7 @@ import { pickGfxLocale } from './gfx-i18n.js';
 import { createUI, fmtTime, cardLabel } from './ui.js';
 import { T, N, initLanguage, onLanguage, getLang } from './i18n.js';
 import { mergeSaveDocs } from './save-merge.js';
-import { detectPreset, resolve as resolveGraphics, DEFAULT_GRAPHICS } from './gfx.js';
+import { detectLevel, presetForLevel, resolve as resolveGraphics, DEFAULT_GRAPHICS } from './gfx.js';
 
 const $ = (id) => document.getElementById(id);
 /** Account-control strings (platform-i18n.js) in the game language. */
@@ -151,7 +151,10 @@ function applySettings() {
   document.body.classList.toggle('large-text', settings.largeText);
   document.body.classList.remove('cb-deuteranopia', 'cb-protanopia', 'cb-tritanopia');
   if (settings.colorblindPalette !== 'default') document.body.classList.add(`cb-${settings.colorblindPalette}`);
-  document.body.dataset.gfxPreset = resolveGraphics(graphicsSettings(), gpuInfo().detected).preset;
+  const gfxNow = resolveGraphics(graphicsSettings(), gpuInfo().detected, gpuInfo().level);
+  document.body.dataset.gfxPreset = gfxNow.preset;
+  // Frosted overlay screens only where the budget allows a per-frame backdrop blur (High/Ultra).
+  document.body.classList.toggle('gfx-blur', !!gfxNow.budget.blur);
   audio.setVolumes(settings.volumes);
   audio.setMuted(settings.muted);
   if (renderer) {
@@ -187,7 +190,15 @@ function gpuInfo() {
     }
   } catch { /* no WebGL: the 2D table is used */ }
   const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-  gpuProbe = { gpu: name, detected: detectPreset(name, { mobile }) };
+  // StarHermit hardware level (js/gpu-level.js): renderer string + device facts (phone/tablet, cores,
+  // memory, screen).
+  let sys = { mobile };
+  try {
+    const G = globalThis.StarHermitGpu;
+    if (G) { const d = G.detectSystem(); sys = { mobile: mobile || d.mobile, webgl2: d.webgl2, touch: d.touch, screen: d.screen, cores: d.cores, memoryGb: d.memoryGb, astc: d.astc }; }
+  } catch { /* defaults */ }
+  const level = detectLevel(name, sys);
+  gpuProbe = { gpu: name, level, detected: presetForLevel(level) };
   return gpuProbe;
 }
 
@@ -198,12 +209,12 @@ function graphicsSettings() {
 
 function graphicsInfo() {
   if (renderer) return renderer.graphicsInfo();
-  const { gpu, detected } = gpuInfo();
-  const resolved = resolveGraphics(graphicsSettings(), detected);
+  const { gpu, detected, level } = gpuInfo();
+  const resolved = resolveGraphics(graphicsSettings(), detected, level);
   const r = ui.els.boardRegion.getBoundingClientRect();
   const w = r.width > 8 ? r.width : window.innerWidth, h = r.height > 8 ? r.height : window.innerHeight;
   const ratio = Math.min(window.devicePixelRatio || 1, resolved.cap) * resolved.scale;
-  return { gpu, detected, resolved, pixels: [Math.round(w * ratio), Math.round(h * ratio)], postFailed: false, noRenderer: true, fps: 0 };
+  return { gpu, level, detected, resolved, pixels: [Math.round(w * ratio), Math.round(h * ratio)], postFailed: false, noRenderer: true, fps: 0 };
 }
 
 function applyGraphics(g) {
@@ -238,6 +249,7 @@ async function ensureRenderer() {
       theme: themeById(settings.theme),
       graphics: graphicsSettings(),
       detected: gpuInfo().detected,
+      level: gpuInfo().level,
       reducedMotion: settings.reducedMotion,
       seed: session ? session.state.seed : 1,
     });

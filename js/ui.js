@@ -665,7 +665,8 @@ export function createUI(handlers) {
 
   function gfxSummaryText(info) {
     const gpu = info.gpu || GT.unknownGpu;
-    return `${gpu} · ${describe(info.resolved, info.pixels, GT.words)}`;
+    const level = info.level != null ? ` · ${GT.level.replace('{n}', info.level)}` : '';
+    return `${gpu}${level} · ${describe(info.resolved, info.pixels, GT.words)}`;
   }
 
   function updateGraphicsInfo(info) {

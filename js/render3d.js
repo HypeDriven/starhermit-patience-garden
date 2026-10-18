@@ -17,7 +17,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { resolve as resolveGraphics, detectPreset, describe, SHADOW_MAP } from './gfx.js';
+import { resolve as resolveGraphics, describe, moteCount, petalCount, MOTE_MAX as MOTE_POOL, PETAL_MAX as PETAL_POOL, SHADOW_MAP } from './gfx.js';
 
 // ---------------------------------------------------------------------------
 // Constants — card metrics, layout, art palette
@@ -658,12 +658,22 @@ function frameShape(w, h, r, inset) {
 // createRenderer
 // ---------------------------------------------------------------------------
 
+// Run a post pass at a fraction of the frame: EffectComposer.addPass/setSize hand every pass the full
+// frame size, so the pass's own setSize applies the budget's scale (half-res bloom/GTAO below Ultra).
+function atScale(pass, k) {
+  if (!(k < 1)) return pass;
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
+}
+
 export function createRenderer(opts) {
   const canvas = opts.canvas;
   let theme = opts.theme;
   const detected = opts.detected || 'balanced';
+  const gpuLevel = Number.isFinite(opts.level) ? opts.level : null; // StarHermit hardware level
   let gfxSaved = opts.graphics || {};
-  let q = resolveGraphics(gfxSaved, detected); // resolved graphics tiers (gfx.js)
+  let q = resolveGraphics(gfxSaved, detected, gpuLevel); // resolved graphics tiers + budget (gfx.js)
   let reducedMotion = !!opts.reducedMotion;
   const rng = mulberry32(opts.seed || 1);
 
@@ -1053,7 +1063,8 @@ export function createRenderer(opts) {
   const WINDOW_BASE = { opacity: 0.12 };
 
   // --- Ambient dust motes (pooled Points, bounded drift) ---------------------
-  const MOTE_MAX = 200;
+  const MOTE_MAX = MOTE_POOL; // allocated at the largest budget; the preset draws moteLive of them
+  let moteLive = moteCount(q);
   const moteGeo = new THREE.BufferGeometry();
   const motePos = new Float32Array(MOTE_MAX * 3);
   const moteVel = new Float32Array(MOTE_MAX * 3);
@@ -1106,7 +1117,7 @@ export function createRenderer(opts) {
   }
 
   // --- Win petals (pooled InstancedMesh) --------------------------------------
-  const PETAL_MAX = 300;
+  const PETAL_MAX = PETAL_POOL; // allocated at the largest budget; the preset caps petalCap
   const petalGeo = new THREE.PlaneGeometry(0.17, 0.24);
   const petalMat = new THREE.MeshBasicMaterial({
     map: petalTex, transparent: true, depthWrite: false, side: THREE.DoubleSide,
@@ -1121,7 +1132,7 @@ export function createRenderer(opts) {
     petalState.push({ x: 0, y: -10, z: 0, vx: 0, vy: 0, vz: 0, rx: 0, ry: 0, rz: 0, spin: 0, sway: 0, life: 0 });
     petals.setColorAt(i, new THREE.Color('#ffffff'));
   }
-  let petalCap = 300;
+  let petalCap = petalCount(q);
   let petalActive = 0;
   let petalSpawnLeft = 0;
 
@@ -1133,19 +1144,23 @@ export function createRenderer(opts) {
   // clearcoat and paper tooth (bump), which catches the key light and the
   // environment reflections without lowering ink contrast.
   const paperBump = paintNoiseBumpTexture(256, 5, 2600);
+  // Card shading per the preset's budget: Lambert on Low, Standard on Balanced, lacquered Physical stock
+  // with the paper-tooth bump on High/Ultra (Detail on).
   function makeFaceMat(id, detailed) {
     const base = {
       map: faceTextureOf(id), roughness: 0.8, metalness: 0.0,
       polygonOffset: true, polygonOffsetFactor: -1, envMapIntensity: 0.14,
     };
-    if (!detailed) return new THREE.MeshStandardMaterial(base);
+    if (q.budget.material === 'lambert') return new THREE.MeshLambertMaterial({ map: base.map, polygonOffset: true, polygonOffsetFactor: -1 });
+    if (!detailed || q.budget.material !== 'physical') return new THREE.MeshStandardMaterial(base);
     return new THREE.MeshPhysicalMaterial({
       ...base, roughness: 0.66, clearcoat: 0.4, clearcoatRoughness: 0.3,
-      bumpMap: paperBump, bumpScale: 0.35,
+      ...(q.budget.paperBump ? { bumpMap: paperBump, bumpScale: 0.35 } : {}),
     });
   }
   function makeBackMat(detailed) {
-    if (!detailed) return new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.85, envMapIntensity: 0.14 });
+    if (q.budget.material === 'lambert') return new THREE.MeshLambertMaterial({ map: backTex });
+    if (!detailed || q.budget.material !== 'physical') return new THREE.MeshStandardMaterial({ map: backTex, roughness: 0.85, envMapIntensity: 0.14 });
     return new THREE.MeshPhysicalMaterial({
       map: backTex, roughness: 0.55, clearcoat: 0.35, clearcoatRoughness: 0.25, envMapIntensity: 0.14,
     });
@@ -1742,7 +1757,7 @@ export function createRenderer(opts) {
   function updateParticles(dt) {
     // dust motes: bounded drift, wrap in a volume over the table
     if (!reducedMotion) {
-      for (let i = 0; i < MOTE_MAX; i++) {
+      for (let i = 0; i < moteLive; i++) {
         let y = motePos[i * 3 + 1] + moteVel[i * 3 + 1] * dt;
         let x = motePos[i * 3] + (moteVel[i * 3] + Math.sin(simTime * 0.5 + i) * 0.03) * dt;
         let z = motePos[i * 3 + 2] + moteVel[i * 3 + 2] * dt;
@@ -1962,8 +1977,9 @@ export function createRenderer(opts) {
   }
 
   function applyDetail(detailed) {
-    if (detailApplied === detailed) return;
-    detailApplied = detailed;
+    const key = [detailed, q.budget.material, q.budget.paperBump].join('|');
+    if (detailApplied === key) return;
+    detailApplied = key;
     for (const card of cards.values()) {
       const old = card.faceMat;
       card.faceMat = makeFaceMat(card.id, detailed);
@@ -1986,8 +2002,9 @@ export function createRenderer(opts) {
   }
 
   function applyMotes() {
-    moteGeo.setDrawRange(0, q.particles === 'high' ? MOTE_MAX : 60);
-    petalCap = q.particles === 'high' ? PETAL_MAX : 120;
+    moteLive = Math.min(MOTE_MAX, moteCount(q));
+    moteGeo.setDrawRange(0, moteLive);
+    petalCap = Math.min(PETAL_MAX, petalCount(q));
   }
 
   /** Apply saved graphics settings ({ preset, render_scale, adaptive, show_fps, <category> }). */
@@ -1997,7 +2014,7 @@ export function createRenderer(opts) {
     gfxJson = json;
     gfxSaved = saved || {};
     const prevShadows = q.shadows;
-    q = resolveGraphics(gfxSaved, detected);
+    q = resolveGraphics(gfxSaved, detected, gpuLevel);
     canvas.dataset.gfxPreset = q.preset;
 
     const size = SHADOW_MAP[q.shadows];
@@ -2027,6 +2044,7 @@ export function createRenderer(opts) {
     const px = [Math.round(lastCssW * pixelRatio), Math.round(lastCssH * pixelRatio)];
     return {
       gpu: gpu || '',
+      level: gpuLevel,
       detected,
       resolved: q,
       pixels: px,
@@ -2097,12 +2115,12 @@ export function createRenderer(opts) {
         ao.blendIntensity = 0.75;
         ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.4, thickness: 0.6, scale: 1.0, samples: hi ? 16 : 8 });
         ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: hi ? 16 : 8 });
-        c.addPass(ao);
+        c.addPass(atScale(ao, q.budget.aoRes));
       }
       if (q.bloom === 'on') {
         // Linear HDR input: lit ivory card stock sits near 2.0, so the threshold
         // is set above it — only glints, the win swell and HDR motes bloom.
-        c.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 0.45, 0.5, BLOOM_THRESHOLD));
+        c.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(W, H), 0.45, 0.5, BLOOM_THRESHOLD), q.budget.bloomRes));
       }
       c.addPass(new OutputPass());
       if (q.grade === 'on') {

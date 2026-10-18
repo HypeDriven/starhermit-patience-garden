@@ -55,7 +55,9 @@ button { font: inherit; }
   overflow: auto;
 }
 .screen[hidden] { display: none !important; }
-.screen.overlay { background: rgba(8, 12, 10, 0.55); backdrop-filter: blur(6px); z-index: 40; }
+.screen.overlay { background: rgba(8, 12, 10, 0.62); z-index: 40; }
+/* Frosted glass over the live table only where the graphics budget allows it (High/Ultra). */
+body.gfx-blur .screen.overlay { background: rgba(8, 12, 10, 0.55); backdrop-filter: blur(6px); }
 
 .glass-panel {
   background: color-mix(in srgb, var(--panel) 88%, transparent);

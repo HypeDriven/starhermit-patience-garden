@@ -1,5 +1,5 @@
 // Patience Garden — graphics quality model: presets, per-category overrides,
-// GPU detection and a cost summary. Pure (no three.js, no DOM), so the
+// StarHermit hardware-level detection, per-preset asset/effect budgets and a cost summary. Pure (no three.js, no DOM), so the
 // Settings panel, the renderer and the unit tests agree on what a setting means.
 
 export const PRESETS = ['low', 'balanced', 'high', 'ultra'];
@@ -30,23 +30,72 @@ export const SHADOW_MAP = { off: 0, low: 1024, medium: 2048, high: 4096 };
 
 export const DEFAULT_GRAPHICS = { preset: 'auto', render_scale: 1, adaptive: true, show_fps: false };
 
-/** Best preset for this GPU, from the unmasked renderer string when the browser exposes it. */
-export function detectPreset(gpu, opts = {}) {
-  const g = String(gpu || '').toLowerCase();
-  let p;
-  if (/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(g)) p = 'low';
-  else if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|amd radeon(?!.*graphics)|apple m\d/.test(g)) p = 'high';
-  else p = 'balanced';
-  // Phones and tablets: Auto never goes above Balanced (heat and battery).
-  if (opts.mobile && PRESETS.indexOf(p) > PRESETS.indexOf('balanced')) p = 'balanced';
-  return p;
+// Auto picks the preset from the StarHermit hardware level (0 = Galaxy S20 / Intel UHD or weaker, 20 = RTX
+// 5090; js/gpu-level.js → window.StarHermitGpu, a classic script loaded before the game): Low from 0,
+// Balanced from 4, High from 10, Ultra from 17. Phones, tablets and ≤ 4 GB machines are capped at level 9.
+export const LEVELS = { low: 0, balanced: 4, high: 10, ultra: 17 };
+const gpuApi = () => globalThis.StarHermitGpu;
+
+/** Hardware level 0–20 for an unmasked renderer string plus StarHermitGpu.detectSystem() facts. */
+export function detectLevel(gpu, system) {
+  const G = gpuApi();
+  const sys = { webgl: true, webgl2: true, ...(system || {}), gpu: String(gpu || '') };
+  if (!gpu) sys.webgl = false; // no renderer string: no usable WebGL
+  return G ? G.detectLevel(sys) : (gpu ? LEVELS.balanced : 0);
 }
+
+/** The preset Auto starts from for a hardware level. */
+export function presetForLevel(level) {
+  const G = gpuApi();
+  return G ? G.presetForLevel(level, LEVELS) : PRESETS.filter((p) => LEVELS[p] <= level).pop() || 'low';
+}
+
+/** Best preset for this GPU (the hardware level already caps phones/tablets at Balanced). */
+export function detectPreset(gpu, system) {
+  return presetForLevel(detectLevel(gpu, system));
+}
+
+/*
+ * Per-preset asset and effect budget. Each preset holds 60 FPS on the weakest GPU Auto gives it (Low →
+ * level 0, Balanced → 4, High → 10, Ultra → 17; measured with tests/gfx-bench.mjs). Cards, piles, tap
+ * areas and rules are identical on every preset — only visuals change.
+ *   material  card shading: lambert (Low) / standard (Balanced) / lacquered physical stock with a
+ *             clearcoat (High, Ultra; Detail on)
+ *   paperBump card paper-tooth bump map (Detail on)
+ *   motes     dust motes in the sunbeams at Particles "high" (low: 30 %), scaled with the level
+ *   petals    win-petal cap at Particles "high" (low: 40 %), scaled with the level
+ *   bloomRes / aoRes  bloom and GTAO resolution as a fraction of the frame
+ *   blur      frosted (backdrop-filter) overlay screens over the live table
+ */
+export const BUDGETS = {
+  low: { material: 'lambert', paperBump: false, motes: 80, petals: 150, bloomRes: 0.5, aoRes: 0.5, blur: false },
+  balanced: { material: 'standard', paperBump: false, motes: 120, petals: 200, bloomRes: 0.5, aoRes: 0.5, blur: false },
+  high: { material: 'physical', paperBump: true, motes: 200, petals: 300, bloomRes: 0.5, aoRes: 0.5, blur: true },
+  ultra: { material: 'physical', paperBump: true, motes: 300, petals: 450, bloomRes: 1, aoRes: 1, blur: true },
+};
+export const MOTE_MAX = 600;
+export const PETAL_MAX = 900;
+
+/** A preset's concrete budget for a hardware level (counts scale ≤ 2× within the preset). */
+export function budgetFor(preset, level) {
+  const b = { ...(BUDGETS[preset] || BUDGETS.balanced) };
+  const G = gpuApi(), floor = LEVELS[preset] || 0;
+  const lv = Math.max(Number.isFinite(level) ? level : floor, floor);
+  const k = G ? Math.min(2, G.scaleBudget(1, lv, floor)) : 1;
+  b.motes = Math.min(MOTE_MAX, Math.round(b.motes * k));
+  b.petals = Math.min(PETAL_MAX, Math.round(b.petals * k));
+  return b;
+}
+
+/** Live mote / petal counts for resolved settings (Particles tier share of the preset's budget). */
+export function moteCount(r) { return Math.round(r.budget.motes * (r.particles === 'high' ? 1 : 0.3)); }
+export function petalCount(r) { return Math.round(r.budget.petals * (r.particles === 'high' ? 1 : 0.4)); }
 
 /**
  * Resolve saved settings into concrete tiers.
  * `saved`: { preset: 'auto'|preset, render_scale, adaptive, show_fps, <category>: 'preset'|tier }.
  */
-export function resolve(saved, detected) {
+export function resolve(saved, detected, level) {
   const s = saved || {};
   const auto = !PRESETS.includes(s.preset);
   const preset = auto ? (PRESETS.includes(detected) ? detected : 'balanced') : s.preset;
@@ -61,6 +110,8 @@ export function resolve(saved, detected) {
   for (const [cat, tiers] of Object.entries(CATEGORIES)) {
     out[cat] = tiers.includes(s[cat]) ? s[cat] : row[cat];
   }
+  out.level = Number.isFinite(level) ? level : LEVELS[preset];
+  out.budget = budgetFor(preset, out.level);
   out.adaptive = s.adaptive !== false;
   out.showFps = !!s.show_fps;
   // Post-processing runs only when something needs it; otherwise canvas MSAA is used.

@@ -90,6 +90,7 @@ async function runPass(vp, opts) {
       let summary = await page.textContent('#gfx-summary');
       expect(/2048² shadows/.test(summary) && /bloom/.test(summary), `high summary: ${summary}`);
       expect(/\d+×\d+ px/.test(summary), 'summary has pixels');
+      expect(/ · Level 0 · /.test(summary), `summary lacks the hardware level: ${summary}`);
       await page.selectOption('#gfx-cat-bloom', 'off');
       summary = await page.textContent('#gfx-summary');
       expect(!/bloom/.test(summary), `bloom override not applied: ${summary}`);
