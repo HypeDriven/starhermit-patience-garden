@@ -546,6 +546,11 @@ export function createUI(handlers) {
     }
   }
 
+  // Drop the hint marks in place (the cards stay, so a press on one keeps its click).
+  function clearBoardHint() {
+    els.boardDom.querySelectorAll('.pcard.hinted').forEach((c) => c.classList.remove('hinted'));
+  }
+
   // ---- results ------------------------------------------------------------------
 
   function renderResults(r, { reopen = true } = {}) {
@@ -877,7 +882,7 @@ export function createUI(handlers) {
     els, showScreen, refreshLanguage, currentScreen, openOverlay, closeOverlay, toast, hideToast, announce, coach,
     setTitleInfo, setPlayerInfo, setAccountButtons, setAccountLabels, onAccountAction, renderModes, renderSetup, getSetupConfig, updateDailyCountdown,
     renderJourney, renderLessons, updateHUD, setActions,
-    buildBoard, renderBoard2D, sizeBoard2D, setBoard2DVisible,
+    buildBoard, renderBoard2D, clearBoardHint, sizeBoard2D, setBoard2DVisible,
     renderResults, renderSettings, renderGraphics, updateGraphicsInfo, renderHelp, renderProfile, renderScores,
     setRailsCollapsed, compatNote,
   };

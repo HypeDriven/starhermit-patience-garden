@@ -786,7 +786,9 @@ function doHint() {
     setTimeout(() => renderer && renderer.setHint(null), 2600);
   }
   refreshBoard();
-  setTimeout(() => { hintShown = null; refreshBoard(); }, 2600);
+  // Expiry only drops the hint marks: re-rendering the 2D board here would
+  // replace a card the player may be pressing, and that click would be lost.
+  setTimeout(() => { hintShown = null; ui.clearBoardHint(); }, 2600);
 }
 
 // ---------------------------------------------------------------------------
