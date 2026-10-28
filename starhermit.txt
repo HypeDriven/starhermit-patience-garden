@@ -1,18 +1,54 @@
 name=Patience Garden
 description=Arrange descending, alternating-color card stacks and build four suit foundations in a garden-themed solitaire game.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 version=1.0.0
 content=1
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.19.2
+engine.minor=20
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# Cards and piles also take the pointer or a finger: tap a card to select it
+# and tap a target to place it, drag a run onto its target, double-tap to
+# bank a card on its foundation, tap the stock to draw. Every button takes
+# the pointer, touch, or Tab and Enter.
+engine.group.focus_left=Table
 control.focus_left=ArrowLeft | Move focus left
 control.focus_right=ArrowRight | Move focus right
 control.focus_up=ArrowUp | Move focus up
 control.focus_down=ArrowDown | Move focus down
 control.select=Enter+NumpadEnter+Space | Select or place
+control.cancel=Backspace | Cancel selection
+engine.group.draw=Round
 control.draw=KeyD | Draw from the stock
 control.undo=KeyU | Undo
 control.hint=KeyH | Hint
 control.autofinish=KeyA | Auto-finish
 control.pause=Escape | Pause / close
+
+# Gamepad defaults (the browser build's gamepad layer): the D-pad or left
+# stick moves the pile focus, South selects or places, East cancels the
+# selection (or pauses), West undoes, North hints, Start pauses; the
+# shoulders draw and auto-finish.
+engine.gamepad.focus_left=DpadLeft+LeftStickLeft
+engine.gamepad.focus_right=DpadRight+LeftStickRight
+engine.gamepad.focus_up=DpadUp+LeftStickUp
+engine.gamepad.focus_down=DpadDown+LeftStickDown
+engine.gamepad.select=South
+engine.gamepad.cancel=East
+engine.gamepad.undo=West
+engine.gamepad.hint=North
+engine.gamepad.draw=LeftShoulder
+engine.gamepad.autofinish=RightShoulder
+engine.gamepad.pause=Start

@@ -5,7 +5,7 @@
 // Settings follow the account (the cloud copy wins); progress, stats,
 // achievements and local scores keep the better record of each entry.
 
-import { DEFAULT_SETTINGS, DEFAULT_PROGRESS, DEFAULT_STATS, DEFAULT_ACHIEVEMENTS } from './storage.js';
+import { DEFAULT_SETTINGS, DEFAULT_PROGRESS, DEFAULT_STATS, DEFAULT_ACHIEVEMENTS } from './save.js';
 import { compareResults } from './rules.js';
 
 const clone = (v) => (v == null ? v : JSON.parse(JSON.stringify(v)));
