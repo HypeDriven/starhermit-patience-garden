@@ -1,38 +1,40 @@
 # Patience Garden
 
 A botanical glasshouse solitaire: build four suit foundations while arranging
-descending, alternating-colour tableau runs. Browser game, no build step.
+descending, alternating-colour tableau runs. A StarHermit engine script game
+(TypeScript on the host API, engine 1.19.2), played natively by the StarHermit
+client and in browsers by the engine's web runtime.
 
 ## Run
 
-Serve this directory with any static file server and open `index.html`:
-
 ```
-python3 -m http.server 8080
-# → http://localhost:8080
+starhermit .                 # natively (the published runtime)
+npm run package              # regenerate the web loader index.html + starhermit-files.json
 ```
 
-(ES modules require http(s); opening the file directly via `file://` won't work.)
+Browsers open the packaged folder's `index.html` (serve it over http).
 
 ## Layout
 
-- `index.html`, `css/` — semantic HTML shell and styles
-- `js/rng.js` — seeded random streams, checksums
-- `js/rules.js` — pure deterministic rules engine (legality, commands, scoring, replay)
-- `js/solver.js` — constructive winnable-deal generation + solvability/difficulty metrics
-- `js/content.js`, `js/content-seeds.js` — themes, 40-stage journey, challenges, lessons, daily
+- `native/` — the engine client: `main.ts` (entry: modes, input, rounds), `screens.ts` (every screen),
+  `render.ts` (the 3D glasshouse), `board2d.ts` (the 2D card table), `platform.ts` (save, options,
+  account, leaderboard), `audio.ts`, `i18n.ts`, `style.ts`, `quality.ts`, `game.ts`
+- `js/rules.js`, `js/rng.js` — pure deterministic rules engine (legality, commands, scoring, replay)
+- `js/solver.js`, `js/content.js`, `js/content-seeds.js` — winnable-deal generation; themes, the
+  40-stage Journey, challenges, lessons, the Daily
 - `js/session.js` — round controller (commands, clock, constraints, replay envelope)
-- `js/render3d.js` + `vendor/three.module.js` (+ `vendor/three/addons/`, r160) — Three.js glasshouse scene, post-processing
-- `js/gfx.js`, `js/gfx-i18n.js` — graphics quality presets/overrides model and Graphics panel strings
-- `js/ui.js`, `js/main.js` — DOM UI (fully playable 2D layer), input, state machine
-- `js/audio.js`, `js/storage.js` — procedural WebAudio, local persistence
-- `server.js` — authoritative validation script (daily seeds, replay checks)
-- `starhermit.txt` — host packaging manifest
-- `tests/` — `node --test tests/*.test.mjs`
-- `tools/precompute.mjs` — regenerates `js/content-seeds.js` (offline content validation)
+- `js/save.js`, `js/save-merge.js` — the save document and its merge
+- `js/i18n.js`, `js/locales/` — nine locales
+- `assets/` — baked textures (`npm run textures`) and the UI styles (`tools/ui-style.css`, `npm run css`)
+- `score-script.js` — the platform script posting won rounds to the high-score board
+- `server.js` — development only: the replay validator and a static server
+- `tests/` — `npm test` (unit tests, then `tests/native.mjs`: tsc, `starhermit check`, play scripts);
+  `npm run test:browser` plays the web package in Chrome
+
+See `spec.md` for the full specification.
 
 ## Modes
 
 Learn (guided lessons) · Journey (40 authored stages) · Daily (shared UTC seed) ·
-Practice (difficulty select, undo/hints, unrated) · Challenge (move/time/layout
-constraints) · Score Chase (local leaderboard on validated seeds).
+Practice (difficulty select, undo/hints, unrated) · Challenge (move/time/recycle
+constraints) · Score Chase (local and StarHermit boards on validated seeds).
