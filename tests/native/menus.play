@@ -1,0 +1,93 @@
+# The menus, the keyboard and the mouse on a desktop (1280 x 800): Settings (a toggle, the theme), How
+# to Play, Profile, Score Chase, the mode select and the Challenge setup, then the first Practice deal
+# played by the keyboard pile focus (arrows, Enter: the 3 of Diamonds onto the 4 of Spades), undone
+# (U), the same move again by a mouse drag, a hint (H), pause (Escape), restart, and leave to the title.
+# viewport 1280x800@1
+until 600 Patience
+frames 10
+click =Settings
+until 120 Interface
+frames 10
+click =Left-handed controls
+frames 10
+click =Dawn Glasshouse
+frames 10
+click =Verdant Canopy
+frames 10
+save menus-settings
+click =Done
+frames 10
+click =How to Play
+until 120 Alternating runs
+frames 10
+click =Done
+frames 10
+click =Profile
+until 120 Career
+frames 10
+expect Games played
+click =Done
+frames 10
+click ❦ Score Chase
+until 120 No results yet
+frames 10
+click =Done
+frames 10
+click =Play
+until 120 Choose your table
+frames 10
+click =Challenge
+until 120 constrained goals
+frames 10
+click One Pass
+frames 10
+save menus-challenge
+click =← Back
+until 120 Choose your table
+frames 10
+click =Practice
+until 120 Begin
+frames 10
+click =Begin
+until 300 banked
+frames 90
+key ArrowDown 1
+frames 5
+key ArrowRight 1
+frames 5
+key Enter 1
+frames 10
+key ArrowRight 1
+frames 3
+key ArrowRight 1
+frames 3
+key ArrowRight 1
+frames 5
+key Enter 1
+frames 30
+expect ↦ 1
+save menus-keyboard
+key KeyU 1
+frames 30
+drag 450 395 737 440 20
+frames 40
+expect ↦ 1
+expect 20 hidden
+save menus-drag
+key KeyH 1
+frames 20
+expect Hint:
+key Escape 1
+until 60 Paused
+frames 10
+click =Restart this deal
+until 120 banked
+frames 30
+expect ↦ 0
+key Escape 1
+until 60 Paused
+frames 10
+click =Leave game
+until 120 Play
+frames 10
+expect Patience

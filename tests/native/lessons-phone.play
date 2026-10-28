@@ -1,0 +1,112 @@
+# All seven lessons on a phone (390 x 844 at 3x) by touch on the glasshouse's named cards and piles:
+# drawing, alternating runs, moving runs and reveals, Kings to empty rows, recycling the stock,
+# foundations (double taps) and auto-finish with the coach's Continue, each to its results and on
+# through "Next".
+# viewport 390x844@3
+until 600 Patience
+frames 10
+touch =Learn
+until 120 Lessons
+frames 10
+touch =Drawing from the Stock
+until 300 Tap the stock
+frames 60
+touch Stock, 2 cards. Activate to draw.
+until 120 You drew
+frames 20
+touch =Eight of Hearts
+frames 10
+touch =Nine of Spades
+until 120 Finish the lesson
+frames 20
+touch Stock, 1 cards. Activate to draw.
+until 120 Double-tap
+frames 20
+touch =Ace of Spades
+frames 2
+touch =Ace of Spades
+until 200 Lesson complete
+frames 30
+expect 1/7 lessons complete
+touch =Next: Alternating Colors
+until 300 Tableau rows build DOWN
+frames 60
+touch =Eight of Spades
+frames 10
+touch =Nine of Hearts
+until 120 Now the red 7
+frames 20
+touch =Seven of Diamonds
+frames 10
+touch =Eight of Spades
+until 200 Lesson complete
+frames 30
+touch =Next: Moving Runs & Reveals
+until 300 Face-up runs move together
+frames 60
+touch =Nine of Spades
+frames 10
+touch =Ten of Diamonds
+until 120 Ace of Clubs
+frames 20
+touch =Ace of Clubs
+frames 2
+touch =Ace of Clubs
+until 200 Lesson complete
+frames 30
+touch =Next: Kings and Empty Rows
+until 300 Only a King may move
+frames 60
+touch =King of Spades
+frames 10
+touch =Row 4, empty
+until 120 join her King
+frames 20
+touch =Queen of Hearts
+frames 10
+touch =King of Spades
+until 200 Lesson complete
+frames 30
+touch =Next: Cycling the Stock
+until 300 Draw the last stock card
+frames 60
+touch Stock, 1 cards. Activate to draw.
+until 120 Tap its outline
+frames 20
+touch Stock empty. Activate to recycle the waste.
+until 120 Draw again
+frames 20
+key KeyD 1
+until 200 Lesson complete
+frames 30
+touch =Next: Growing the Foundations
+until 300 Bank the Ace of Hearts
+frames 60
+touch =Ace of Hearts
+frames 2
+touch =Ace of Hearts
+until 120 Now the 2 of Hearts
+frames 30
+touch =Two of Hearts
+frames 2
+touch =Two of Hearts
+until 120 And the 3
+frames 30
+touch =Three of Hearts
+frames 2
+touch =Three of Hearts
+until 200 Lesson complete
+frames 30
+touch =Next: The Autofinish
+until 300 Only the four Kings remain
+frames 60
+save lesson-autofinish
+touch Auto-finish
+until 300 A complete garden
+frames 60
+touch =Continue
+until 200 Lesson complete
+frames 30
+expect 7/7 lessons complete
+expect Graduate unlocked
+save lessons-done

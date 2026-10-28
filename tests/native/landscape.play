@@ -1,0 +1,43 @@
+# A phone held sideways (844 x 390 at 3x): the title, the mode select and setup by touch, a Practice
+# deal on the glasshouse with the rails' drawer (ℹ), a draw from the tray, a hint, then the pause
+# screen and its Settings, back to the deal.
+# viewport 844x390@3
+until 600 Patience
+frames 10
+save land-title
+touch =Play
+until 120 Choose your table
+frames 10
+touch =Practice
+until 120 Begin
+frames 10
+touch =Begin
+until 300 Hint
+frames 60
+save land-game
+touch =Toggle objective panel
+until 60 OBJECTIVE
+frames 10
+expect GARDEN
+save land-drawer
+touch =Toggle objective panel
+frames 10
+touch ⟳ Draw
+frames 30
+expect ↦ 1
+touch ✦ Hint
+frames 20
+expect Hint:
+touch =Pause (Esc)
+until 60 Paused
+frames 10
+touch =Settings
+until 120 Interface
+frames 10
+save land-settings
+touch =Done
+until 60 Paused
+frames 10
+touch =Resume
+frames 20
+expect Practice

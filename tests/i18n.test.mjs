@@ -3,7 +3,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DICTS, LOCALES, T, setLocale, getLang, onLanguage } from '../js/i18n.js';
-import { gfxStrings, pickGfxLocale } from '../js/gfx-i18n.js';
 import { platformStrings } from '../js/platform-i18n.js';
 import { ALL } from './i18n-keys.mjs';
 
@@ -31,14 +30,8 @@ test('no locale carries keys that no longer exist', () => {
   }
 });
 
-test('Graphics and account strings exist for every game locale', () => {
-  for (const locale of LOCALES) {
-    const picked = pickGfxLocale([locale]);
-    assert.equal(picked, locale);
-    assert.ok(gfxStrings(picked).section, locale);
-    assert.ok(platformStrings(picked).signIn, locale);
-  }
-  assert.equal(gfxStrings('de-DE').section, 'Grafik');
+test('account strings exist for every game locale', () => {
+  for (const locale of LOCALES) assert.ok(platformStrings(locale).signIn, locale);
 });
 
 test('T falls back to the key and fills placeholders; regional variants inherit', () => {
