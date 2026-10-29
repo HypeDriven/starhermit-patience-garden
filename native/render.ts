@@ -12,8 +12,8 @@
 // derive from each rules snapshot (computeTargets); moves tween with authored
 // durations and an arc, settle() fast-forwards them.
 //
-// From three.js r160 (physically based lights): the punctual and hemisphere
-// intensities ÷ π (the engine takes three's legacy units); ACES at 1.1. The
+// From three.js r160 (physically based lights; engine.minor 28): the punctual and hemisphere
+// intensities, shadow box and bias as render3d.js set them; ACES at 1.1. The
 // old EffectComposer chain (GTAO, UnrealBloom on linear HDR, OutputPass, the
 // display-space GradeShader, SMAA / FXAA / MSAA) is the runtime's renderer.ao /
 // bloom / grade ("display") / antialias. Per-material envMapIntensity with
@@ -26,7 +26,7 @@ import {
   DirectionalLight, DoubleSide, Euler, ExtrudeGeometry, Fog, Group, HemisphereLight, IcosahedronGeometry, InstancedMesh, LatheGeometry,
   LineBasicMaterial, LineSegments, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial, MeshStandardMaterial,
   PerspectiveCamera, Plane, PlaneGeometry, PMREMGenerator, PointLight, Points, PointsMaterial, Quaternion, QuadraticBezierCurve3, Raycaster,
-  RepeatWrapping, RingGeometry, RoomEnvironment, SRGBColorSpace, Shape, ShapeGeometry, TextureLoader, TorusGeometry, TubeGeometry, Vector2,
+  OrthographicCamera, RepeatWrapping, RingGeometry, RoomEnvironment, SRGBColorSpace, Shape, ShapeGeometry, TextureLoader, TorusGeometry, TubeGeometry, Vector2,
   Vector3, BoxGeometry, pointerToNdc, renderer, scene,
   type Material, type Object3D, type Texture,
 } from "starhermit:scene";
@@ -146,13 +146,19 @@ let cameraDrift = true;
 let seed = 1;
 let rng = mulberry32(1);
 
-const LIGHT = { hemi: 0.65 / PI, hemiIbl: 0.55 / PI, key: 1.7 / PI, accent: 14 / PI, exposure: 1.1 };
+const LIGHT = { hemi: 0.65, hemiIbl: 0.55, key: 1.7, accent: 14, exposure: 1.1 };
 const hemi = new HemisphereLight(theme.sky[0], "#3a2f26", LIGHT.hemi);
 const keyLight = new DirectionalLight("#ffd9a8", LIGHT.key);
 keyLight.position.set(6, 12, 4.55);
 keyLight.target.position.set(0, 0, -0.45);
 keyLight.shadow.bias = -0.0004;
-keyLight.shadow.normalBias = 1.5;
+keyLight.shadow.normalBias = 0.02;
+// render3d.js fitted the shadow frustum to the table top (12.6 x 15.2 slab centred at z=-0.45) as seen from the light.
+{
+  const sc = keyLight.shadow.camera as OrthographicCamera;
+  Object.assign(sc, { left: -7.4, right: 7.4, top: 7.2, bottom: -7.2, near: 6, far: 22 });
+  sc.updateProjectionMatrix();
+}
 const accentLight = new PointLight(theme.accent, LIGHT.accent, 18, 2);
 accentLight.position.set(-3, 3.2, 2.5);
 scene.add(hemi, keyLight, keyLight.target, accentLight);
@@ -949,7 +955,6 @@ function refit(): void {
   camera.lookAt(camTarget);
   camera.setViewOffset(view.width, view.height, -view.x, -view.y, win.w, win.h);
   camera.updateProjectionMatrix();
-  keyLight.shadow.distance = d + 16;
 }
 
 // ---------------------------------------------------------------- per frame
