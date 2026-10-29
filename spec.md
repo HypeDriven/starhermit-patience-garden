@@ -1,6 +1,6 @@
 # Patience Garden — Product and Game Specification
 
-**Document status:** running specification of the game as built on the StarHermit engine 1.23.0 (host API 1.21, `engine.minor=20`).  
+**Document status:** running specification of the game as built on the StarHermit engine 1.24.0 (host API 1.21, `engine.minor=20`).  
 **Game index:** 30  
 **Genre:** Card sequencing puzzle  
 **Players:** 1 player; optional asynchronous score comparison  
@@ -141,7 +141,7 @@ The session's clock advances 1000/60 ms per fixed step while the window shows (6
 
 ## 6. StarHermit integration
 
-- **Manifest** (`starhermit.txt`): `engine.entry=native/main.ts`, `engine.version=1.23.0`, `engine.minor=20`, capabilities `platform, storage, clipboard`, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action. `npm run package` writes the web loader `index.html` and `starhermit-files.json`; `.starhermitignore` leaves out tests, tools, docs and the dev server.
+- **Manifest** (`starhermit.txt`): `engine.entry=native/main.ts`, `engine.version=1.24.0`, `engine.minor=20`, capabilities `platform, storage, clipboard`, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action. `npm run package` writes the web loader `index.html` and `starhermit-files.json`; `.starhermitignore` leaves out tests, tools, docs and the dev server.
 - **Save**: `saves` (schema 1) holds `{ progress, stats, achievements, scores, session }`, on the device and in the player's cloud slot; another device's save merges in (save-merge.js: best record of every entry, earliest unlocks, scores unioned; this device's round in progress wins). The browser build's slot (`game:<slug>`, `{ version, savedAt, settings, progress, stats, achievements, scores }`) shows as foreign: it is merged in, its game options adopted unless set here since, and replaced once (`replaceForeign`). Its settings KV keys are adopted the same way and then removed (graphics, volumes, mute, reduced motion, contrast, larger text and language are the runtime's). Guests' old browser localStorage progress does not carry over.
 - **Leaderboards**: signed in, every won round (any mode but lessons) posts its total through `score-script.js` (a practice session carrying `{ type: 'result', scores: { 'high-score': n } }`); the results show posting / rank / posted / not posted. Score Chase shows the local board per mode and, signed in, the high-score board's top 20.
 - **Account**: Sign in with StarHermit (`requestSignIn`) for guests; Invite a friend copies the invite link; the title shows the player and the cloud-save state; a signed-out session keeps playing locally with a notice.
