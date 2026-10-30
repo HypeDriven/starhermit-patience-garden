@@ -2,7 +2,7 @@
 
 A botanical glasshouse solitaire: build four suit foundations while arranging
 descending, alternating-colour tableau runs. A StarHermit engine script game
-(TypeScript on the host API, engine 1.24.0), played natively by the StarHermit
+(TypeScript on the host API, engine 1.28.0), played natively by the StarHermit
 client and in browsers by the engine's web runtime.
 
 ## Run
