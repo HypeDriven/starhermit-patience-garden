@@ -1170,7 +1170,8 @@ export function applyLook(next: Look): void {
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: hi ? 16 : 8, radiusExponent: 2 },
   };
   // UnrealBloomPass(0.45, 0.5, threshold 2.4) on the linear HDR scene, as the runtime blooms.
-  renderer.bloom = next.bloom ? { strength: 0.45, radius: 0.5, threshold: BLOOM_THRESHOLD, resolution: next.budget.bloomRes } : null;
+  // three r160 page: UnrealBloomPass 0.45 squared (0.2025) for the engine's r185 bloom (engine.minor 29).
+  renderer.bloom = next.bloom ? { strength: 0.2025, radius: 0.5, threshold: BLOOM_THRESHOLD, resolution: next.budget.bloomRes } : null;
   // GradeShader after OutputPass (display space): S-curve 0.28, saturation 1.14, cool shadows / warm highlights, vignette 0.26.
   renderer.grade = next.grade ? {
     space: "display", contrast: 0.14, saturation: 1.14, split: [0.25, 0.85], shadows: [0.97, 1.0, 1.03], highlights: [1.04, 1.01, 0.95],
