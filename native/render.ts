@@ -694,7 +694,7 @@ function tintMarkers(): void {
   for (const m of markers) { m.mat.color.set(m.color()); m.disc?.color.set(m.color()); }
   hintLineMat.color.set(theme.accent);
   hintConeMat.color.set(theme.accent);
-  if (look?.bloom) hintConeMat.color.multiplyScalar(3);
+  if (look && look.bloom !== null) hintConeMat.color.multiplyScalar(3);
 }
 
 function locPos(loc: Loc): { x: number; z: number } {
@@ -1162,16 +1162,16 @@ export function applyLook(next: Look): void {
   renderer.toneMappingExposure = LIGHT.exposure;
   renderer.shadowMap.enabled = next.shadows > 0;
   keyLight.castShadow = next.shadows > 0;
-  if (next.shadows > 0) keyLight.shadow.mapSize = next.shadows;
+  if (next.shadows > 0) keyLight.shadow.mapSize = next.shadows; // the level's size: the engine doesn't hold mapSize to it
   // GTAOPass: blendIntensity 0.75, radius 0.45, distanceExponent 1.4, thickness 0.6; samples / denoise per tier.
-  const hi = next.ao === "high";
-  renderer.ao = next.ao === "off" ? null : {
-    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.4, thickness: 0.6, scale: 1, samples: hi ? 16 : 8, resolution: next.budget.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: hi ? 16 : 8, radiusExponent: 2 },
+  const ao = next.ao, hi = !!ao && ao.resolution >= 1; // the engine's AO "high" is full resolution
+  renderer.ao = ao && {
+    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.4, thickness: 0.6, scale: 1, samples: ao.samples, resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: hi ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // UnrealBloomPass(0.45, 0.5, threshold 2.4) on the linear HDR scene, as the runtime blooms.
   // three r160 page: bloom model "r160" with the page's strength 0.45 (engine.minor 30).
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.45, radius: 0.5, threshold: BLOOM_THRESHOLD, resolution: next.budget.bloomRes } : null;
+  renderer.bloom = next.bloom === null ? null : { model: "r160", strength: 0.45, radius: 0.5, threshold: BLOOM_THRESHOLD, resolution: next.bloom };
   // GradeShader after OutputPass (display space): S-curve 0.28, saturation 1.14, cool shadows / warm highlights, vignette 0.26.
   renderer.grade = next.grade ? {
     space: "display", contrastCurve: "s", contrast: 0.28, saturation: 1.14, split: [0.25, 0.85], shadows: [0.97, 1.0, 1.03], highlights: [1.04, 1.01, 0.95],

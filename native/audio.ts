@@ -12,8 +12,8 @@
 // volumes, the mute and the voice limit. The oscillator blips the browser
 // build synthesized while a sample decoded are not ported (a live synthesis
 // graph makes clip loads fail on the engine's web runtime), so a clip still
-// loading is silent. Clips load once the mixer runs (natively at once, in a
-// browser after the first press), one at a time.
+// loading is silent. Clips all load at once in onStart; the ambience and the
+// music wait for the mixer (natively at once, in a browser after the first press).
 import { frame } from "starhermit:engine";
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Sound } from "starhermit:audio";
 import { createRng } from "../js/rng.js";
@@ -25,13 +25,14 @@ const SFX: Record<string, string> = {
 };
 export type Sfx = keyof typeof SFX;
 const clips = new Map<string, AudioClip>();
-const queue: string[] = [];
-let loading = false;
-let wantClips = false;
 let suspended = false;
 
-/** Asks for the clips; they load once the mixer runs (see update). */
-export function loadSfx(): void { wantClips = true; }
+/** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
+export function loadSfx(): void {
+  for (const name of new Set(Object.values(SFX))) {
+    loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); }, (e: unknown) => console.warn(`sfx ${name}: ${String(e)}`));
+  }
+}
 
 /** audio.js playSfx(name). */
 export function play(event: Sfx): void {
@@ -40,7 +41,7 @@ export function play(event: Sfx): void {
   const clip = clips.get(file);
   if (!clip) return;
   try { playClip(clip, { bus: "effects" }); }
-  catch { clips.delete(file); if (!queue.includes(file)) queue.push(file); }
+  catch { /* the mixer is full this frame: skip it */ }
 }
 
 // -- the ambience ---------------------------------------------------------------------------------
@@ -101,22 +102,9 @@ export function setSuspended(on: boolean): void {
   try { ambVoice?.fade(on ? 0 : 0.8, 0.2); } catch { /* gone */ }
 }
 
-/** Each frame: the clips once the mixer runs (one at a time), then the ambience and the music notes. */
+/** Each frame, once the mixer runs: the ambience and the music notes. */
 export function update(): void {
   if (context.state !== "running") return;
-  if (wantClips) {
-    wantClips = false;
-    for (const n of Object.values(SFX)) if (!queue.includes(n)) queue.push(n);
-  }
-  if (!loading && queue.length) {
-    const name = queue.shift()!;
-    if (!clips.has(name)) {
-      loading = true;
-      loadClip(`sfx/${name}.opus`).then((c) => { clips.set(name, c); loading = false; }, (e: unknown) => { console.warn(`sfx ${name}: ${String(e)}`); loading = false; });
-    }
-    return;
-  }
-  if (loading) return;
   if (!ambClip) {
     if (!renderAmbience(6000)) return;
     try { ambClip = createClip([amb], RATE); } catch (e) { console.warn(`audio: ${String(e)}`); ambPos = 0; }

@@ -1,0 +1,28 @@
+# Bench scene: Journey stage 1 (fixed deal) on the 3D table: stock draws, then the settled table with motes. Written for tools/engine-tier-bench.mjs.
+until 600 Patience
+frames 10
+click =Journey
+until 120 The Journey
+frames 10
+click =Stage 1: First Sprouts. Unlocked.
+until 300 banked
+frames 120
+measure start
+key KeyD 1
+frames 30
+key KeyD 1
+frames 30
+key KeyD 1
+frames 30
+key KeyD 1
+frames 30
+key KeyD 1
+frames 30
+key KeyD 1
+frames 30
+key KeyD 1
+frames 30
+key KeyD 1
+frames 30
+frames 360
+measure stop
