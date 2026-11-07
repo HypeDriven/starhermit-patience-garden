@@ -24,7 +24,7 @@ Browsers open the packaged folder's `index.html` (serve it over http).
   40-stage Journey, challenges, lessons, the Daily
 - `js/session.js` — round controller (commands, clock, constraints, replay envelope)
 - `js/save.js`, `js/save-merge.js` — the save document and its merge
-- `js/i18n.js`, `js/locales/` — nine locales
+- `assets/strings.json` — nine locales
 - `assets/` — baked textures (`npm run textures`) and the UI styles (`tools/ui-style.css`, `npm run css`)
 - `score-script.js` — the platform script posting won rounds to the high-score board
 - `server.js` — development only: the replay validator and a static server

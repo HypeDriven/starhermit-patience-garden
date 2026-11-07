@@ -13,7 +13,6 @@
     "css": "node tools/css.mjs",
     "plays": "node tools/gen-plays.mjs",
     "textures": "node tools/bake-textures.mjs",
-    "i18n": "node tools/i18n-sync.mjs",
     "precompute": "node tools/precompute.mjs"
   },
   "devDependencies": {

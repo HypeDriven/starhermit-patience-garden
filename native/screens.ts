@@ -30,10 +30,8 @@ import { token } from "./style.ts";
 // ------------------------------------------------------------------ layout
 interface Layout { lw: number; lh: number; sc: number; wide: boolean; phone: boolean; short: boolean }
 function layoutNow(): Layout {
-  const f = frame();
-  const sc = ui.preferences().scale;
-  const sa = f.safeArea;
-  const lw = Math.max(1, (f.width - sa.left - sa.right) / sc), lh = Math.max(1, (f.height - sa.top - sa.bottom) / sc);
+  const v = ui.viewport!();
+  const lw = Math.max(1, v.width), lh = Math.max(1, v.height), sc = v.scale;
   return { lw, lh, sc, wide: lw >= 1024, phone: lw <= 700 && lh > lw, short: lh <= 520 && lw > lh };
 }
 const lastSize = new Map<string, number>();

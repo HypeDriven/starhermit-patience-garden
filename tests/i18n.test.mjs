@@ -2,10 +2,11 @@
 // Keys are the US-English source strings (see tests/i18n-keys.mjs).
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DICTS, LOCALES, T, setLocale, getLang, onLanguage } from '../js/i18n.js';
-import { platformStrings } from '../js/platform-i18n.js';
+import { readFileSync } from 'node:fs';
 import { ALL } from './i18n-keys.mjs';
 
+const DICTS = JSON.parse(readFileSync(new URL('../assets/strings.json', import.meta.url), 'utf8'));
+const LOCALES = Object.keys(DICTS);
 const placeholders = (s) => [...String(s).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(',');
 const tags = (s) => (String(s).match(/<[^>]+>/g) || []).join('');
 
@@ -30,36 +31,11 @@ test('no locale carries keys that no longer exist', () => {
   }
 });
 
-test('account strings exist for every game locale', () => {
-  for (const locale of LOCALES) assert.ok(platformStrings(locale).signIn, locale);
-});
-
-test('T falls back to the key and fills placeholders; regional variants inherit', () => {
-  setLocale('de-DE');
-  assert.equal(T('Not a real key {x}', { x: 1 }), 'Not a real key 1');
-  assert.equal(T('{n} moves', { n: 3 }), '3 Züge');
-  assert.equal(T('{rank} of {suit}', { rank: T('Queen'), suit: T('Hearts') }), 'Herz-Dame');
-  setLocale('fr-CA');
-  assert.equal(T('Score'), 'Pointage');
-  assert.equal(T('Hint'), 'Indice');
-  setLocale('es-ES');
-  assert.equal(T('Settings'), 'Ajustes');
-  assert.equal(T('Hint'), 'Pista');
-  setLocale('en-GB');
-  assert.equal(T('Color-vision palette'), 'Colour-vision palette');
-  assert.equal(T('Hint'), 'Hint');
-  setLocale('xx-YY');
-  assert.equal(getLang(), 'en-US');
-});
-
-test('onLanguage listeners fire only when the locale changes', () => {
-  setLocale('en-US');
-  const seen = [];
-  const off = onLanguage((l) => seen.push(l));
-  setLocale('it-IT');
-  setLocale('it-IT');
-  setLocale('pt-BR');
-  off();
-  setLocale('en-US');
-  assert.deepEqual(seen, ['it-IT', 'pt-BR']);
+test('regional variants inherit', () => {
+  assert.equal(DICTS['de-DE']['{n} moves'], '{n} Züge');
+  assert.equal(DICTS['fr-CA'].Score, 'Pointage');
+  assert.equal(DICTS['fr-CA'].Hint, 'Indice');
+  assert.equal(DICTS['es-ES'].Settings, 'Ajustes');
+  assert.equal(DICTS['es-ES'].Hint, 'Pista');
+  assert.equal(DICTS['en-GB']['Color-vision palette'], 'Colour-vision palette');
 });

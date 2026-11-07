@@ -94,7 +94,7 @@ Screens are `starhermit:ui`, built every frame (`native/screens.ts`), from the b
 
 ### Localization
 
-Nine locales (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) in `js/locales/*.js`, keyed by the US-English text, picked from the runtime's interface language (Options › Language, else the account's or the device's). Every string is drawn through `T()` each frame, so a change shows at once without restarting the round. `tests/i18n.test.mjs` checks every key used by `js/` and `native/` (and the content tables) in every locale; `tools/i18n-sync.mjs` prunes unused keys and adds new translations.
+Nine locales (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) in `assets/strings.json`, keyed by the US-English text, picked from the runtime's interface language (Options › Language, else the account's or the device's). Every string is drawn through `T()` each frame, so a change shows at once without restarting the round. `tests/i18n.test.mjs` checks every key used by `js/` and `native/` (and the content tables) in every locale; `tools/i18n-sync.mjs` prunes unused keys and adds new translations.
 
 ## 4. Visual and audio design
 
@@ -126,7 +126,7 @@ The engine's graphics level (`levelSettings()`) sets the shadow map, AO, bloom, 
 | `js/solver.js`, `js/content.js`, `js/content-seeds.js` | Constructive winnable deals with certificates; themes, Journey, challenges, practice, Daily, lessons, achievements, modes. |
 | `js/session.js` | Round controller: validated commands, the pause-aware clock (`now` injected), constraints, replay envelope, snapshot / restore, breakdown. |
 | `js/save.js`, `js/save-merge.js` | The save document and its merge, local boards, achievements, the game's options, the old cloud slot reader. |
-| `js/i18n.js`, `js/locales/*.js`, `js/platform-i18n.js` | String tables and the account strings. |
+| `assets/strings.json` | String tables (account strings are the engine's). |
 | `native/main.ts` | Entry: app state, modes, input, the round's end, lifecycle. |
 | `native/screens.ts`, `native/board2d.ts` | Every screen, the HUD / rails / tray, the named targets; the 2D table. |
 | `native/render.ts`, `native/quality.ts` | The glasshouse; the look per quality tier. |

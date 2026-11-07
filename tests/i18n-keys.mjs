@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { MODES, LESSONS, JOURNEY, PRACTICE_LEVELS, CHALLENGES, THEMES, PROFILES, BAND_LABELS, ACHIEVEMENTS } from '../js/content.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
-const SKIP = new Set(['i18n.js', 'platform-i18n.js']);
+const SKIP = new Set();
 const unescape = (s) => s.replace(/\\(['"`\\])/g, '$1');
 
 export function sourceKeys() {
