@@ -169,3 +169,11 @@ The browser build's local funnel log (`patience-garden/funnel` in localStorage, 
 - The “no WebGL” fallback to the 2D table is moot (the runtime always draws); the 2D table remains a setting.
 - The hint arc is drawn as dashes of line segments (no dashed line material).
 - Known rules quirk kept for replay compatibility: none observed beyond those resolved in `knownissues.md`.
+
+<!-- regional-localization:start -->
+
+### Regional interface languages
+
+The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `nl-BE`, `zh-SG`, `nl-NL`, `id-ID`, `ms-SG`, `ta-SG`, `zh-HK`, `yue-HK`, `vi-VN`, `ja-JP`, `fi-FI`, `sv-FI`, `et-EE`, `ru-FI`, `ru-EE`, `da-DE`, `lb-BE`, `co-FR`, `eu-FR`, `ca-FR`, `oc-FR`, `sl-IT`, `fur-IT`, `ca-IT`, `oc-IT`, `ca-ES`, `eu-ES`, `gl-ES`, `su-ID`, `bew-ID`, `km-VN`.
+
+<!-- regional-localization:end -->

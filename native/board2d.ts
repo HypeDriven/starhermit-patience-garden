@@ -1,3 +1,4 @@
+import { localizedDrawOptions as __l10nDrawOptions } from "./l10n/font.ts";
 // The 2D card table (Settings › Interface: 2D cards), as the browser build's
 // semantic DOM board (js/ui.js buildBoard / renderBoard2D, css/style.css
 // .pcard): the stock, the waste fanned up to three cards, the four
@@ -63,10 +64,10 @@ export function board2d(region: { x: number; y: number; width: number; height: n
     const ink = Rules.colorOf(card) === "red" ? red : BLACK;
     const rank = Rules.RANK_LABELS[Rules.rankOf(card)]!, suit = Rules.SUIT_SYMBOLS[Rules.suitOf(card)]!;
     const fs = cw * 0.24 * sc;
-    draw.text(rank, r.x + cw * 0.07 * sc + fs * 0.4, y + cw * 0.04 * sc, { size: fs, color: ink, weight: "bold", align: "center" });
-    draw.text(suit, r.x + cw * 0.07 * sc + fs * 0.4, y + cw * 0.04 * sc + fs * 1.05, { size: cw * 0.22 * sc, color: ink, align: "center" });
-    draw.text(rank, r.x + W - cw * 0.07 * sc - fs * 0.4, y + H - cw * 0.04 * sc - fs * 1.05, { size: fs, color: ink, weight: "bold", align: "center", rotation: Math.PI, origin: { x: r.x + W - cw * 0.07 * sc - fs * 0.4, y: y + H - cw * 0.04 * sc - fs * 0.55 } });
-    draw.text(suit, r.x + W / 2, y + H / 2 - cw * 0.3 * sc, { size: cw * 0.52 * sc, color: ink, align: "center" });
+    draw.text(rank, r.x + cw * 0.07 * sc + fs * 0.4, y + cw * 0.04 * sc, __l10nDrawOptions({ size: fs, color: ink, weight: "bold", align: "center" }));
+    draw.text(suit, r.x + cw * 0.07 * sc + fs * 0.4, y + cw * 0.04 * sc + fs * 1.05, __l10nDrawOptions({ size: cw * 0.22 * sc, color: ink, align: "center" }));
+    draw.text(rank, r.x + W - cw * 0.07 * sc - fs * 0.4, y + H - cw * 0.04 * sc - fs * 1.05, __l10nDrawOptions({ size: fs, color: ink, weight: "bold", align: "center", rotation: Math.PI, origin: { x: r.x + W - cw * 0.07 * sc - fs * 0.4, y: y + H - cw * 0.04 * sc - fs * 0.55 } }));
+    draw.text(suit, r.x + W / 2, y + H / 2 - cw * 0.3 * sc, __l10nDrawOptions({ size: cw * 0.52 * sc, color: ink, align: "center" }));
     if (opts.hinted) {
       const k = reduced ? 1 : 0.5 + 0.5 * Math.sin(t * 7);
       draw.strokeRoundRect(r.x - 3 * sc, y - 3 * sc, W + 6 * sc, H + 6 * sc, rad * sc + 3 * sc, token("accent"), (2 + 3 * k) * sc);
@@ -88,7 +89,7 @@ export function board2d(region: { x: number; y: number; width: number; height: n
     const W = cw * sc, H = ch * sc;
     if (isTarget(zone, pile)) draw.box(r.x, r.y, W, H, { radius: rad, border: { width: 2, color: token("accent-2") }, shadow: { x: 0, y: 0, blur: 12, color: token("accent-2") + "99" } });
     else if (drawLabel) draw.box(r.x, r.y, W, H, { radius: rad, border: { width: 2, color: token("line-20") } });
-    if (drawLabel && glyph) draw.text(glyph, r.x + W / 2, r.y + H / 2 - cw * 0.3 * sc, { size: cw * 0.5 * sc, color: token("line-25") === "#000000" ? "#ffffff55" : token("text") + "59", align: "center" });
+    if (drawLabel && glyph) draw.text(glyph, r.x + W / 2, r.y + H / 2 - cw * 0.3 * sc, __l10nDrawOptions({ size: cw * 0.5 * sc, color: token("line-25") === "#000000" ? "#ffffff55" : token("text") + "59", align: "center" }));
   };
   const outline = (b: Box, color: string, width: number): void => {
     const id = `b2d-o${n++}`;
