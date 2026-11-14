@@ -1,5 +1,7 @@
 # Patience Garden
 
+**[▶ Play Patience Garden on StarHermit](https://dashboard.starhermit.com/play/3433c50f-78aa-4b90-a2b0-f97411f922df)**
+
 A botanical glasshouse solitaire: build four suit foundations while arranging
 descending, alternating-colour tableau runs. A StarHermit engine script game
 (TypeScript on the host API, engine 1.39.0), played natively by the StarHermit
