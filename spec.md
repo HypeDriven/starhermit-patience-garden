@@ -1,6 +1,6 @@
 # Patience Garden — Product and Game Specification
 
-**Document status:** running specification of the game as built on the StarHermit engine 1.39.0 (host API 1.39, `engine.minor=39`).
+**Document status:** running specification of the game as built on the StarHermit engine 1.44.1 (host API 1.44, `engine.minor=44`).
 **Game index:** 30  
 **Genre:** Card sequencing puzzle  
 **Players:** 1 player; optional asynchronous score comparison  
@@ -141,7 +141,7 @@ The session's clock advances 1000/60 ms per fixed step while the window shows (6
 
 ## 6. StarHermit integration
 
-- **Manifest** (`starhermit.txt`): `engine.entry=native/main.ts`, `engine.version=1.39.0`, `engine.minor=39`, capabilities `platform, storage, clipboard`, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action. `npm run package` writes the web loader `index.html` and `starhermit-files.json`; `.starhermitignore` leaves out tests, tools, docs and the dev server.
+- **Manifest** (`starhermit.txt`): `engine.entry=native/main.ts`, `engine.version=1.44.1`, `engine.minor=44`, capabilities `platform, storage, clipboard`, `server=score-script.js`, `control.*` and `engine.gamepad.*` for every action. `npm run package` writes the web loader `index.html` and `starhermit-files.json`; `.starhermitignore` leaves out tests, tools, docs and the dev server.
 - **Save**: `saves` (schema 1) holds `{ progress, stats, achievements, scores, session }`, on the device and in the player's cloud slot; another device's save merges in (save-merge.js: best record of every entry, earliest unlocks, scores unioned; this device's round in progress wins). The browser build's slot (`game:<slug>`, `{ version, savedAt, settings, progress, stats, achievements, scores }`) shows as foreign: it is merged in, its game options adopted unless set here since, and replaced once (`replaceForeign`). Its settings KV keys are adopted the same way and then removed (graphics, volumes, mute, reduced motion, contrast, larger text and language are the runtime's). Guests' old browser localStorage progress does not carry over.
 - **Leaderboards**: signed in, every won round (any mode but lessons) posts its total through `score-script.js` (a practice session carrying `{ type: 'result', scores: { 'high-score': n } }`); the results show posting / rank / posted / not posted. Score Chase shows the local board per mode and, signed in, the high-score board's top 20.
 - **Account**: Sign in with StarHermit (`requestSignIn`) for guests; Invite a friend copies the invite link; the title shows the player and the cloud-save state; a signed-out session keeps playing locally with a notice.
@@ -177,3 +177,11 @@ The browser build's local funnel log (`patience-garden/funnel` in localStorage, 
 The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `nl-BE`, `zh-SG`, `nl-NL`, `id-ID`, `ms-SG`, `ta-SG`, `zh-HK`, `yue-HK`, `vi-VN`, `ja-JP`, `fi-FI`, `sv-FI`, `et-EE`, `ru-FI`, `ru-EE`, `da-DE`, `lb-BE`, `co-FR`, `eu-FR`, `ca-FR`, `oc-FR`, `sl-IT`, `fur-IT`, `ca-IT`, `oc-IT`, `ca-ES`, `eu-ES`, `gl-ES`, `su-ID`, `bew-ID`, `km-VN`.
 
 <!-- regional-localization:end -->
+
+## Engine 1.44.1
+
+Browser play uses the WebGPU-only StarHermit 1.44.1 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+
+The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
+
+Toasts use native engine stacking, styling, accessibility and lifetime management.

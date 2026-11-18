@@ -125,14 +125,13 @@ export function keysFor(action: string): string {
 }
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   const L = layoutNow();
   const f = frame();
   const s = top();
   const page = !!s && PAGES.has(s.name);
   if (app.session && !page) gameScreen(L);
   else { view.width = 0; view.height = 0; paint("page-bg", 0, 0, f.width, f.height, "page"); }
-  toasts(L);
   screens(L);
   if (app.focusNext) {
     const age = f.frame - app.openedFrame;
@@ -312,15 +311,6 @@ function boardTargets(): void {
     if (!pile.length) { target(T("Row {n}, empty", { n: p + 1 }), { zone: "tableau", pile: p, index: -1 }); continue; }
     pile.forEach((e, i) => { if (e.up) target(cardLabel(e.c), { zone: "tableau", pile: p, index: i }); });
   }
-}
-
-// ------------------------------------------------------------------ toasts (#toast)
-function toasts(L: Layout): void {
-  if (!app.toast) return;
-  const bottom = app.session && !(top() && PAGES.has(top()!.name)) ? (lastSize.get("tray") ?? 65) + 12 : 24;
-  const w = Math.min(L.lw * 0.9, 480);
-  ui.place("toast", { anchor: "bottom", y: bottom }, () =>
-    ui.column("toast-col", () => para(app.toast!.text, w - 44, "toast-text", "toast-text"), { style: app.toast!.error ? "toast-error" : "toast", align: "center" }));
 }
 
 // ------------------------------------------------------------------ screens (index.html sections)
@@ -751,3 +741,10 @@ function scoresScreen(w: number): void {
 }
 
 export type { Loc };
+
+export function drawScreens(): void {
+  if (!(app.screens.some((screen) => screen.name === "help"))) { drawScreensImmediate(); return; }
+  const actions = ["focus_left","focus_right","focus_up","focus_down","select","cancel","draw","undo","hint","autofinish","pause"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
+}

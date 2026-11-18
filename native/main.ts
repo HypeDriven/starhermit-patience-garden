@@ -93,7 +93,9 @@ let tickCount = 0;
 export function announce(text: string, assertive = false): void {
   if (text) ui.announce(text.slice(0, 500), { politeness: assertive ? "assertive" : "polite" });
 }
-export function toast(text: string, error = false): void { app.toast = { text, error, until: now() + 2.6 }; }
+export function toast(text: string, error = false): void {
+  ui.toast!(text, { kind: error ? "error" : "info", duration: 2.6, position: "bottom", offset: app.session ? 77 : 24, style: error ? "toast-error" : "toast", dismissible: false });
+}
 function haptic(ms: number): void { if (platform.options.haptics) { try { vibrate(ms); } catch { /* no motor */ } } }
 const INVALID_TEXT: Record<string, string> = {
   "no-movable-card": N("That card cannot move — only uncovered cards and valid runs move."),
