@@ -1178,6 +1178,7 @@ export function applyLook(next: Look): void {
     vignette: { amount: 0.26, inner: 0.38, outer: 0.9, scale: [1.1, 1] },
   } : null;
   renderer.antialias = next.antialias;
+  renderer.motionBlur = next.bloom !== null ? { intensity: 0.25, samples: 8, maxPixels: 16, targetFps: 60, camera: false } : null;
   rebuild();
 }
 /** The player's theme (content.js THEMES). */
