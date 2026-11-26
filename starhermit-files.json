@@ -113,7 +113,7 @@
     "native/render.ts": {"sha256": "6ca89af46602f56775bb66bf04ce4cae9ed496fd5dd69bb8f168744f46d61035", "size": 57856},
     "native/screens.ts": {"sha256": "2d2a71df02a5d949a3a737ea3003799095e064dc226e010433cc52a4b49d8af2", "size": 46613},
     "native/style.ts": {"sha256": "3f2c1cb670c1bc46cc8a14c53f9fc004a770a24ad1298e10f45f86ab4a04067a", "size": 4225},
-    "publication.json": {"sha256": "4059d997382ed25a289bf60c80ec405eba3a50a8c08c4c154634e2d5dc9ce699", "size": 4158},
+    "publication.json": {"sha256": "1989c934b4705bcf9c6bbddeae6060836c191f2a3c4ecf8028d04682c196d253", "size": 4158},
     "score-script.js": {"sha256": "762eda4323fbe38bb29abf1117ec1d637253e288024f9aa8fcb5735b81ef2902", "size": 2488},
     "sfx/card-draw.opus": {"sha256": "e90e92f8349d2164e7f1cea6ce8efc49a213e2c838c2dbb0d55f0eb686a80f4b", "size": 12630},
     "sfx/card-flip.opus": {"sha256": "605b04e5516c8306603d352000b816c993b8f6d37c3b98c2e8331d33415748c7", "size": 15220},
