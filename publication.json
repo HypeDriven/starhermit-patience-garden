@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:01:05.601667+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-23T17:02:22.980007+00:00",
+    "coverArtUpdatedAt": "2026-11-26T13:25:11.907767+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-23T17:02:22.957914+00:00",
+      "deployedAt": "2026-11-26T13:25:11.892067+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.47.0",
+      "engineVersion": "1.50.0",
       "deployWarning": null
     },
     "description": "Arrange descending, alternating-color card stacks and build four suit foundations in a garden-themed solitaire game.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-23T17:02:23.129Z",
-  "sourceCommit": "aade419b9430653b9921c1e3f9b0610fd6469550",
-  "bytesReceived": 5146593,
-  "archiveSha256": "49367d9172889a85c36510a37bbb148d950e88887faeecbbbf2df3a4bdf75a68",
+  "publishedAt": "2026-11-26T13:25:12.041Z",
+  "sourceCommit": "d76fe26aca618862700ba87b37af9609e8f96dcd",
+  "bytesReceived": 5146557,
+  "archiveSha256": "52afcd89e04d606d76cda0b98c7ee12ae30f94490a7b9b18d26fe3d714815263",
   "indexSha256": "46dd4383348c8177f442e73bd03b0967db555a23c83c09498ecf584cac092bca",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 5146593,
+    "bytesReceived": 5146557,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.47.0",
+    "engineVersion": "1.50.0",
     "deployWarning": null
   },
   "liveVerification": {
